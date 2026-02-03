@@ -17,6 +17,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/")
+def health_check():
+    """Health check endpoint."""
+    return {"status": "ok"}
+
+
 def get_db_factory():
     """Factory function para criar novas sessões do banco."""
     def factory() -> Session:

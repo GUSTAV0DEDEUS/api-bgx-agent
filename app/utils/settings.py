@@ -34,6 +34,10 @@ class Settings:
     # Message Handler Config
     message_history_limit: int = int(os.getenv("MESSAGE_HISTORY_LIMIT", "20"))
     message_consolidation_timeout: int = int(os.getenv("MESSAGE_CONSOLIDATION_TIMEOUT", "60"))
+    
+    # Response Delay Config (humanização)
+    min_response_delay: int = int(os.getenv("MIN_RESPONSE_DELAY", "10"))
+    max_response_delay: int = int(os.getenv("MAX_RESPONSE_DELAY", "45"))
 
     @property
     def database_url(self) -> str:
@@ -43,10 +47,28 @@ class Settings:
 settings = Settings()
 
 
-@lru_cache
-def load_system_prompt() -> str:
-    """Carrega o system prompt do arquivo instructions/system_prompt.md"""
-    instructions_path = Path(__file__).parent.parent / "instructions" / "system_prompt.md"
+def _load_prompt_file(filename: str) -> str:
+    """Carrega um arquivo de prompt da pasta instructions."""
+    instructions_path = Path(__file__).parent.parent / "instructions" / filename
     if not instructions_path.exists():
         return ""
     return instructions_path.read_text(encoding="utf-8")
+
+
+@lru_cache
+def load_system_prompt() -> str:
+    """Carrega o system prompt de qualificação (principal)."""
+    return _load_prompt_file("system_prompt_qualificacao.md")
+
+
+@lru_cache
+def load_lead_prompt() -> str:
+    """Carrega o system prompt para criação de leads."""
+    return _load_prompt_file("system_prompt_lead.md")
+
+
+@lru_cache
+def load_scoring_prompt() -> str:
+    """Carrega o system prompt para scoring de leads."""
+    return _load_prompt_file("system_prompt_scoring.md")
+

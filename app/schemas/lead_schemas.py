@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+
+class LeadBase(BaseModel):
+    """Base para lead."""
+    nome_cliente: str | None = None
+    nome_empresa: str | None = None
+    cargo: str | None = None
+    telefone: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class LeadCreate(LeadBase):
+    """Request para criar lead manualmente."""
+    conversation_id: uuid.UUID
+    profile_id: uuid.UUID
+    score: int = Field(default=50, ge=0, le=100)
+
+
+class LeadUpdate(BaseModel):
+    """Request para atualizar lead (PATCH)."""
+    nome_cliente: str | None = None
+    nome_empresa: str | None = None
+    cargo: str | None = None
+    telefone: str | None = None
+    tags: list[str] | None = None
+    score: int | None = Field(default=None, ge=0, le=100)
+    notes: str | None = None
+    status: str | None = Field(default=None, pattern="^(novo|contatado|convertido|perdido)$")
+    
+    # Steps do pipeline (checklist)
+    step_novo_lead: bool | None = None
+    step_primeiro_contato: bool | None = None
+    step_orcamento_realizado: bool | None = None
+    step_orcamento_recusado: bool | None = None
+    step_venda_convertida: bool | None = None
+
+
+class LeadSteps(BaseModel):
+    """Steps do pipeline de vendas."""
+    novo_lead: bool
+    primeiro_contato: bool
+    orcamento_realizado: bool
+    orcamento_recusado: bool
+    venda_convertida: bool
+
+
+class LeadResponse(BaseModel):
+    """Response de lead."""
+    id: uuid.UUID
+    conversation_id: uuid.UUID
+    profile_id: uuid.UUID
+    nome_cliente: str | None
+    nome_empresa: str | None
+    cargo: str | None
+    telefone: str | None
+    tags: list[str]
+    score: int | None
+    notes: str | None
+    status: str
+    
+    # Steps do pipeline
+    step_novo_lead: bool
+    step_primeiro_contato: bool
+    step_orcamento_realizado: bool
+    step_orcamento_recusado: bool
+    step_venda_convertida: bool
+    
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LeadsListResponse(BaseModel):
+    """Resposta de listagem de leads paginada."""
+    items: list[LeadResponse]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
+class LeadMetricsResponse(BaseModel):
+    """Resposta de métricas de leads."""
+    total: int
+    by_step: dict[str, int]
+    by_status: dict[str, int]
+    conversion_rate: float

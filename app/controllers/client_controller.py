@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+import math
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from app.dao import conversation_dao, profile_dao
+from app.schemas.client_schemas import (
+    AddTagRequest,
+    ClientDetailResponse,
+    ClientsListResponse,
+    ConversationSummary,
+    ProfileWithTags,
+)
+from app.utils.db import get_db
+
+
+router = APIRouter(prefix="/clients", tags=["Clients"])
+
+
+@router.get("/", response_model=ClientsListResponse)
+def list_clients(
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    tag: str | None = Query(default=None, description="Filtrar por tag"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista todos os clientes (profiles) com paginação.
+    
+    Filtros opcionais:
+    - tag: Filtra clientes que possuem a tag especificada
+    """
+    profiles, total = profile_dao.get_all_paginated(db, page, per_page, tag)
+    
+    items = [
+        ProfileWithTags(
+            id=p.id,
+            whatsapp_number=p.whatsapp_number,
+            display_name=p.display_name,
+            tags=p.tags or [],
+            created_at=p.created_at, # type: ignore
+            updated_at=p.updated_at, # type: ignore
+        )
+        for p in profiles
+    ]
+    
+    return ClientsListResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=math.ceil(total / per_page) if total > 0 else 0,
+    )
+
+
+@router.get("/{client_id}", response_model=ClientDetailResponse)
+def get_client_detail(
+    client_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna detalhes de um cliente específico com suas conversas.
+    """
+    profile = profile_dao.get_by_id(db, client_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    conversations = conversation_dao.get_all_by_profile_id(db, client_id)
+    
+    profile_response = ProfileWithTags(
+        id=profile.id,
+        whatsapp_number=profile.whatsapp_number,
+        display_name=profile.display_name,
+        tags=profile.tags or [],
+        created_at=profile.created_at, # type: ignore
+        updated_at=profile.updated_at, # type: ignore
+    )
+    
+    conversations_response = [
+        ConversationSummary(
+            id=c.id,
+            status=c.status,
+            tags=c.tags or [],
+            closed_at=c.closed_at,
+            closed_by=c.closed_by,
+            closed_reason=c.closed_reason,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+        )
+        for c in conversations
+    ]
+    
+    return ClientDetailResponse(
+        profile=profile_response,
+        conversations=conversations_response,
+    )
+
+
+@router.get("/{client_id}/conversations", response_model=list[ConversationSummary])
+def get_client_conversations(
+    client_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """
+    Lista todas as conversas de um cliente específico.
+    """
+    profile = profile_dao.get_by_id(db, client_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    conversations = conversation_dao.get_all_by_profile_id(db, client_id)
+    
+    return [
+        ConversationSummary(
+            id=c.id,
+            status=c.status,
+            tags=c.tags or [],
+            closed_at=c.closed_at,
+            closed_by=c.closed_by,
+            closed_reason=c.closed_reason,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+        )
+        for c in conversations
+    ]
+
+
+@router.post("/{client_id}/tags", response_model=ProfileWithTags)
+def add_client_tag(
+    client_id: uuid.UUID,
+    request: AddTagRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Adiciona uma tag a um cliente.
+    
+    Regras:
+    - Tag é normalizada para lowercase com underscores
+    - Máximo de 3 tags por cliente
+    - Tags duplicadas são ignoradas
+    """
+    profile = profile_dao.add_tag(db, client_id, request.tag)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    return ProfileWithTags(
+        id=profile.id,
+        whatsapp_number=profile.whatsapp_number,
+        display_name=profile.display_name,
+        tags=profile.tags or [],
+        created_at=profile.created_at, # type: ignore
+        updated_at=profile.updated_at, # type: ignore
+    )
+
+
+@router.delete("/{client_id}/tags/{tag}", response_model=ProfileWithTags)
+def remove_client_tag(
+    client_id: uuid.UUID,
+    tag: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Remove uma tag de um cliente.
+    """
+    profile = profile_dao.remove_tag(db, client_id, tag)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    return ProfileWithTags(
+        id=profile.id,
+        whatsapp_number=profile.whatsapp_number,
+        display_name=profile.display_name,
+        tags=profile.tags or [],
+        created_at=profile.created_at, # type: ignore
+        updated_at=profile.updated_at, # type: ignore
+    )

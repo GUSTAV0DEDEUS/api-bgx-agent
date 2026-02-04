@@ -11,15 +11,15 @@ from app.utils.settings import settings, load_system_prompt
 logger = logging.getLogger(__name__)
 
 
-class AIServiceError(RuntimeError):
-    pass
-
-
 @dataclass
 class ChatMessage:
     """Representa uma mensagem no formato OpenAI."""
     role: str  # 'user', 'assistant' ou 'system'
     content: str
+
+
+class AIServiceError(RuntimeError):
+    pass
 
 
 class AIService:
@@ -56,11 +56,15 @@ class AIService:
         """
         Constrói lista de mensagens no formato OpenAI.
         Inclui system prompt se disponível.
+        
+        Args:
+            messages: Lista de mensagens da conversa
         """
         result = []
         
-        # Adiciona system prompt se existir
+        # Adiciona system prompt do arquivo
         system_prompt = load_system_prompt()
+            
         if system_prompt:
             result.append({
                 "role": "system",

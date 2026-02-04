@@ -58,6 +58,18 @@ class ClientsListResponse(BaseModel):
     pages: int
 
 
+class MessageResponse(BaseModel):
+    """Mensagem de uma conversa."""
+    id: uuid.UUID
+    role: str  # 'user' ou 'agent'
+    content: str
+    message_type: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class AddTagRequest(BaseModel):
     """Request para adicionar tag."""
     tag: str = Field(..., min_length=1, max_length=32)

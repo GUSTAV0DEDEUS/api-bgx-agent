@@ -6,12 +6,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.dao import conversation_dao, profile_dao
+from app.dao import conversation_dao, message_dao, profile_dao
 from app.schemas.client_schemas import (
     AddTagRequest,
     ClientDetailResponse,
     ClientsListResponse,
     ConversationSummary,
+    MessageResponse,
     ProfileWithTags,
 )
 from app.utils.db import get_db
@@ -125,6 +126,48 @@ def get_client_conversations(
             updated_at=c.updated_at,
         )
         for c in conversations
+    ]
+
+
+@router.get(
+    "/{client_id}/conversations/{conversation_id}/messages",
+    response_model=list[MessageResponse],
+)
+def get_conversation_messages(
+    client_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    limit: int = Query(default=50, ge=1, le=200, description="Número máximo de mensagens"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista o histórico de mensagens de uma conversa.
+    
+    Retorna as mensagens ordenadas da mais antiga para a mais recente.
+    """
+    # Verifica se o cliente existe
+    profile = profile_dao.get_by_id(db, client_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    # Verifica se a conversa existe e pertence ao cliente
+    conversation = conversation_dao.get_by_id(db, conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    if conversation.profile_id != client_id:
+        raise HTTPException(status_code=404, detail="Conversa não pertence a este cliente")
+    
+    # Busca mensagens
+    messages = message_dao.get_messages_by_conversation_id(db, conversation_id, limit=limit)
+    
+    return [
+        MessageResponse(
+            id=m.id,
+            role=m.role,
+            content=m.content,
+            message_type=m.message_type,
+            created_at=m.created_at,  # type: ignore
+        )
+        for m in messages
     ]
 
 

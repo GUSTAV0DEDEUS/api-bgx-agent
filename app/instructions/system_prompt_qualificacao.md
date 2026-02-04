@@ -40,7 +40,7 @@ Deixa eu te perguntar uma coisa rápida…"
 ```
 Fala.
 Me conta rapidão:
-você quer IA pra vender mais
+Você quer IA pra vender mais
 ou pra parar de perder lead?
 ```
 

@@ -75,6 +75,32 @@ def _load_prompt(filename: str) -> str:
     return ""
 
 
+def _safe_format(template: str, **kwargs) -> str:
+    """
+    Formata template de forma segura, tratando valores None e caracteres especiais.
+    """
+    safe_kwargs = {}
+    for key, value in kwargs.items():
+        if value is None:
+            safe_kwargs[key] = "Não informado"
+        elif isinstance(value, str):
+            # Escapa chaves para evitar problemas com .format()
+            safe_kwargs[key] = value.replace("{", "{{").replace("}", "}}")
+        else:
+            safe_kwargs[key] = str(value)
+    return template.format(**safe_kwargs)
+
+
+def _get_lead_field(lead: dict | None, field: str, default: str = "Não informado") -> str:
+    """Obtém campo do lead de forma segura."""
+    if not lead:
+        return default
+    value = lead.get(field)
+    if value is None or value == "":
+        return default
+    return str(value)
+
+
 QUALIFY_PROMPT = """Você é um agente de qualificação de leads da BGX Group.
 
 ## OBJETIVO
@@ -304,7 +330,7 @@ class LangGraphService:
         """Node de qualificação - extrai dados do lead."""
         context = self._format_context(state["messages"])
         
-        prompt = QUALIFY_PROMPT.format(context=context)
+        prompt = _safe_format(QUALIFY_PROMPT, context=context)
         
         messages = [
             SystemMessage(content=prompt),
@@ -343,13 +369,14 @@ class LangGraphService:
     
     def _first_contact_node(self, state: ConversationState) -> ConversationState:
         """Node de primeiro contato - discovery e qualificação."""
-        lead = state.get("lead") or {}
+        lead = state.get("lead")
         context = self._format_context(state["messages"])
         
-        prompt = FIRST_CONTACT_PROMPT.format(
-            nome_cliente=lead.get("nome_cliente", "Não informado"),
-            nome_empresa=lead.get("nome_empresa", "Não informado"),
-            cargo=lead.get("cargo", "Não informado"),
+        prompt = _safe_format(
+            FIRST_CONTACT_PROMPT,
+            nome_cliente=_get_lead_field(lead, "nome_cliente"),
+            nome_empresa=_get_lead_field(lead, "nome_empresa"),
+            cargo=_get_lead_field(lead, "cargo"),
             context=context,
         )
         
@@ -381,13 +408,14 @@ class LangGraphService:
     
     def _conversion_node(self, state: ConversationState) -> ConversationState:
         """Node de conversão - prepara handoff para consultor."""
-        lead = state.get("lead") or {}
+        lead = state.get("lead")
         context = self._format_context(state["messages"])
         
-        prompt = CONVERSION_PROMPT.format(
-            nome_cliente=lead.get("nome_cliente", "Não informado"),
-            nome_empresa=lead.get("nome_empresa", "Não informado"),
-            cargo=lead.get("cargo", "Não informado"),
+        prompt = _safe_format(
+            CONVERSION_PROMPT,
+            nome_cliente=_get_lead_field(lead, "nome_cliente"),
+            nome_empresa=_get_lead_field(lead, "nome_empresa"),
+            cargo=_get_lead_field(lead, "cargo"),
             context=context,
         )
         

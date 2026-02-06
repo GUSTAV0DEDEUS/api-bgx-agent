@@ -437,10 +437,18 @@ class MessageHandler:
                 existing_lead = lead_dao.get_by_conversation_id(db, conversation_id)
                 
                 if not existing_lead:
+                    # Busca profile para usar display_name como fallback
+                    profile = profile_dao.get_by_id(db, profile_id)
+                    
+                    # Se nome_cliente não foi extraído, usa display_name do WhatsApp
+                    nome_cliente = lead_data.get("nome_cliente")
+                    if not nome_cliente and profile and profile.display_name:
+                        nome_cliente = profile.display_name
+                    
                     # Calcula score
                     scoring_service = get_lead_scoring_service()
                     lead_data_obj = LeadData(
-                        nome_cliente=lead_data.get("nome_cliente"),
+                        nome_cliente=nome_cliente,
                         nome_empresa=lead_data.get("nome_empresa"),
                         cargo=lead_data.get("cargo"),
                         telefone=profile_phone,
@@ -456,7 +464,7 @@ class MessageHandler:
                         conversation_id=conversation_id,
                         profile_id=profile_id,
                         telefone=profile_phone,
-                        nome_cliente=lead_data.get("nome_cliente"),
+                        nome_cliente=nome_cliente,
                         nome_empresa=lead_data.get("nome_empresa"),
                         cargo=lead_data.get("cargo"),
                         tags=lead_data.get("tags", []),

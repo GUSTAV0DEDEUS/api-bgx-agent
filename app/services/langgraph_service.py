@@ -207,7 +207,7 @@ class LangGraphService:
     """
     
     def __init__(self, model: str | None = None, api_key: str | None = None):
-        self.model_name = model or "gemini-2.0-flash-lite"
+        self.model_name = model or "gemini-2.5-flash-lite"
         self.api_key = api_key or settings.gemini_api_key
         self._llm: ChatGoogleGenerativeAI | None = None
         self._graph: StateGraph | None = None

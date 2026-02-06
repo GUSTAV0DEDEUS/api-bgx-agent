@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.dao import conversation_dao, message_dao, profile_dao
+from app.entities.conversation_entity import ConversationStatus
 from app.schemas.client_schemas import (
     AddTagRequest,
     ClientDetailResponse,
     ClientsListResponse,
+    CloseConversationRequest,
     ConversationSummary,
     MessageResponse,
     ProfileWithTags,
@@ -219,4 +221,111 @@ def remove_client_tag(
         tags=profile.tags or [],
         created_at=profile.created_at, # type: ignore
         updated_at=profile.updated_at, # type: ignore
+    )
+
+
+@router.post(
+    "/{client_id}/conversations/{conversation_id}/close",
+    response_model=ConversationSummary,
+)
+def close_conversation(
+    client_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    request: CloseConversationRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Fecha uma conversa (consultor encerra atendimento).
+    
+    - Muda status de 'human' para 'closed'
+    - Permite que próxima mensagem do cliente crie nova conversa
+    - Apenas conversas em status 'open' ou 'human' podem ser fechadas
+    """
+    # Verifica se o cliente existe
+    profile = profile_dao.get_by_id(db, client_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    # Verifica se a conversa existe e pertence ao cliente
+    conversation = conversation_dao.get_by_id(db, conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    if conversation.profile_id != client_id:
+        raise HTTPException(status_code=404, detail="Conversa não pertence a este cliente")
+    
+    # Verifica se já está fechada
+    if conversation.status == ConversationStatus.CLOSED:
+        raise HTTPException(status_code=400, detail="Conversa já está fechada")
+    
+    # Fecha a conversa
+    reason = request.reason if request else None
+    closed_conversation = conversation_dao.close_conversation(
+        db, conversation_id, closed_by="admin", closed_reason=reason
+    )
+    
+    if not closed_conversation:
+        raise HTTPException(status_code=500, detail="Erro ao fechar conversa")
+    
+    return ConversationSummary(
+        id=closed_conversation.id,
+        status=closed_conversation.status,
+        tags=closed_conversation.tags or [],
+        closed_at=closed_conversation.closed_at,
+        closed_by=closed_conversation.closed_by,
+        closed_reason=closed_conversation.closed_reason,
+        created_at=closed_conversation.created_at,
+        updated_at=closed_conversation.updated_at,
+    )
+
+
+@router.post(
+    "/{client_id}/conversations/{conversation_id}/human",
+    response_model=ConversationSummary,
+)
+def set_human_takeover(
+    client_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """
+    Ativa human takeover manualmente (consultor assume atendimento).
+    
+    - Muda status de 'open' para 'human'
+    - IA para de responder
+    - Mensagens do cliente continuam sendo persistidas
+    """
+    # Verifica se o cliente existe
+    profile = profile_dao.get_by_id(db, client_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    # Verifica se a conversa existe e pertence ao cliente
+    conversation = conversation_dao.get_by_id(db, conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    if conversation.profile_id != client_id:
+        raise HTTPException(status_code=404, detail="Conversa não pertence a este cliente")
+    
+    # Verifica se está em status válido
+    if conversation.status != ConversationStatus.OPEN:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Conversa precisa estar aberta. Status atual: {conversation.status}"
+        )
+    
+    # Ativa human takeover
+    updated_conversation = conversation_dao.set_human_takeover(db, conversation_id)
+    
+    if not updated_conversation:
+        raise HTTPException(status_code=500, detail="Erro ao ativar human takeover")
+    
+    return ConversationSummary(
+        id=updated_conversation.id,
+        status=updated_conversation.status,
+        tags=updated_conversation.tags or [],
+        closed_at=updated_conversation.closed_at,
+        closed_by=updated_conversation.closed_by,
+        closed_reason=updated_conversation.closed_reason,
+        created_at=updated_conversation.created_at,
+        updated_at=updated_conversation.updated_at,
     )

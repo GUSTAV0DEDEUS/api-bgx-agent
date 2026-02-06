@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.entities.conversation_entity import Conversation
+from app.entities.conversation_entity import Conversation, ConversationStatus
 
 
 # Constante: máximo de tags por conversa
@@ -20,7 +20,27 @@ def get_by_id(db: Session, conversation_id: uuid.UUID) -> Conversation | None:
 def get_open_by_profile_id(db: Session, profile_id) -> Conversation | None:
     return (
         db.query(Conversation)
-        .filter(Conversation.profile_id == profile_id, Conversation.status == "open")
+        .filter(Conversation.profile_id == profile_id, Conversation.status == ConversationStatus.OPEN)
+        .order_by(Conversation.created_at.desc())
+        .first()
+    )
+
+
+def get_active_by_profile_id(db: Session, profile_id) -> Conversation | None:
+    """
+    Retorna conversa ativa (open ou human) do profile.
+    
+    - open: IA responde normalmente
+    - human: consultor assumiu, IA silenciada
+    
+    Se não houver conversa ativa, retorna None.
+    """
+    return (
+        db.query(Conversation)
+        .filter(
+            Conversation.profile_id == profile_id,
+            Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.HUMAN])
+        )
         .order_by(Conversation.created_at.desc())
         .first()
     )
@@ -38,7 +58,7 @@ def get_all_by_profile_id(db: Session, profile_id: uuid.UUID) -> list[Conversati
 
 def create_conversation(db: Session, profile_id) -> Conversation:
     """Cria uma nova conversa sem tags (conversa limpa)."""
-    conversation = Conversation(profile_id=profile_id, status="open", tags=[])
+    conversation = Conversation(profile_id=profile_id, status=ConversationStatus.OPEN, tags=[])
     db.add(conversation)
     db.commit()
     db.refresh(conversation)
@@ -47,11 +67,12 @@ def create_conversation(db: Session, profile_id) -> Conversation:
 
 def get_or_create_open(db: Session, profile_id) -> Conversation:
     """
-    Retorna conversa aberta existente ou cria uma nova.
+    Retorna conversa ativa existente ou cria uma nova.
     
-    Se existir conversa fechada, cria uma nova conversa limpa (sem herdar tags).
+    - Retorna conversa com status 'open' ou 'human' se existir
+    - Se só existirem conversas 'closed', cria uma nova conversa limpa
     """
-    conversation = get_open_by_profile_id(db, profile_id)
+    conversation = get_active_by_profile_id(db, profile_id)
     if conversation:
         return conversation
     # Cria nova conversa sem tags (limpa)
@@ -80,10 +101,35 @@ def close_conversation(
     if not conversation:
         return None
     
-    conversation.status = "closed"
+    conversation.status = ConversationStatus.CLOSED
     conversation.closed_at = datetime.now()
     conversation.closed_by = closed_by
     conversation.closed_reason = closed_reason
+    
+    db.commit()
+    db.refresh(conversation)
+    return conversation
+
+
+def set_human_takeover(
+    db: Session,
+    conversation_id: uuid.UUID,
+) -> Conversation | None:
+    """
+    Ativa human takeover: consultor assume, IA para de responder.
+    
+    Args:
+        db: Sessão do banco
+        conversation_id: ID da conversa
+    
+    Returns:
+        Conversa atualizada ou None se não encontrada
+    """
+    conversation = get_by_id(db, conversation_id)
+    if not conversation:
+        return None
+    
+    conversation.status = ConversationStatus.HUMAN
     
     db.commit()
     db.refresh(conversation)

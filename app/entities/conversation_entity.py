@@ -12,12 +12,19 @@ from sqlalchemy.sql import func
 from app.utils.db import Base
 
 
+class ConversationStatus:
+    """Status possíveis para uma conversa."""
+    OPEN = "open"      # IA responde normalmente
+    HUMAN = "human"    # Consultor assumiu, IA silenciada
+    CLOSED = "closed"  # Conversa encerrada
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     profile_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"), index=True)
-    status: Mapped[str] = mapped_column(String(32), default="open", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default=ConversationStatus.OPEN, nullable=False)
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)

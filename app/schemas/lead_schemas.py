@@ -32,12 +32,13 @@ class LeadUpdate(BaseModel):
     tags: list[str] | None = None
     score: int | None = Field(default=None, ge=0, le=100)
     notes: str | None = None
-    status: str | None = Field(default=None, pattern="^(novo|contatado|convertido|perdido)$")
+    status: str | None = Field(default=None, pattern="^(novo|em_contato|proposta_enviada|fechado|perdido)$")
     
     # Steps do pipeline (checklist)
     step_novo_lead: bool | None = None
     step_primeiro_contato: bool | None = None
     step_orcamento_realizado: bool | None = None
+    step_orcamento_aceito: bool | None = None
     step_orcamento_recusado: bool | None = None
     step_venda_convertida: bool | None = None
 
@@ -47,6 +48,7 @@ class LeadSteps(BaseModel):
     novo_lead: bool
     primeiro_contato: bool
     orcamento_realizado: bool
+    orcamento_aceito: bool
     orcamento_recusado: bool
     venda_convertida: bool
 
@@ -69,6 +71,7 @@ class LeadResponse(BaseModel):
     step_novo_lead: bool
     step_primeiro_contato: bool
     step_orcamento_realizado: bool
+    step_orcamento_aceito: bool
     step_orcamento_recusado: bool
     step_venda_convertida: bool
     

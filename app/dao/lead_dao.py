@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.entities.lead_entity import Lead
+from app.entities.lead_entity import Lead, LeadStatus
 
 
 def get_by_id(db: Session, lead_id: uuid.UUID) -> Lead | None:
@@ -15,6 +15,20 @@ def get_by_id(db: Session, lead_id: uuid.UUID) -> Lead | None:
         db.query(Lead)
         .filter(Lead.id == lead_id, Lead.deleted_at.is_(None))
         .one_or_none()
+    )
+
+
+def get_by_profile_id(db: Session, profile_id: uuid.UUID) -> Lead | None:
+    """
+    Retorna o lead mais recente de um profile (excluindo soft deleted).
+    
+    Útil para verificar se cliente já tem lead em conversas anteriores.
+    """
+    return (
+        db.query(Lead)
+        .filter(Lead.profile_id == profile_id, Lead.deleted_at.is_(None))
+        .order_by(Lead.created_at.desc())
+        .first()
     )
 
 
@@ -58,6 +72,7 @@ def get_all_paginated(
             "step_novo_lead": Lead.step_novo_lead,
             "step_primeiro_contato": Lead.step_primeiro_contato,
             "step_orcamento_realizado": Lead.step_orcamento_realizado,
+            "step_orcamento_aceito": Lead.step_orcamento_aceito,
             "step_orcamento_recusado": Lead.step_orcamento_recusado,
             "step_venda_convertida": Lead.step_venda_convertida,
         }
@@ -99,7 +114,7 @@ def create_lead(
         tags=tags or [],
         score=score,
         notes=notes,
-        status="novo",
+        status=LeadStatus.NOVO,
         step_novo_lead=True,
     )
     db.add(lead)
@@ -122,6 +137,7 @@ def update_lead(
     step_novo_lead: bool | None = None,
     step_primeiro_contato: bool | None = None,
     step_orcamento_realizado: bool | None = None,
+    step_orcamento_aceito: bool | None = None,
     step_orcamento_recusado: bool | None = None,
     step_venda_convertida: bool | None = None,
 ) -> Lead | None:
@@ -152,6 +168,8 @@ def update_lead(
         lead.step_primeiro_contato = step_primeiro_contato
     if step_orcamento_realizado is not None:
         lead.step_orcamento_realizado = step_orcamento_realizado
+    if step_orcamento_aceito is not None:
+        lead.step_orcamento_aceito = step_orcamento_aceito
     if step_orcamento_recusado is not None:
         lead.step_orcamento_recusado = step_orcamento_recusado
     if step_venda_convertida is not None:
@@ -188,15 +206,17 @@ def get_metrics(db: Session) -> dict:
         "novo_lead": base_query.filter(Lead.step_novo_lead == True).count(),
         "primeiro_contato": base_query.filter(Lead.step_primeiro_contato == True).count(),
         "orcamento_realizado": base_query.filter(Lead.step_orcamento_realizado == True).count(),
+        "orcamento_aceito": base_query.filter(Lead.step_orcamento_aceito == True).count(),
         "orcamento_recusado": base_query.filter(Lead.step_orcamento_recusado == True).count(),
         "venda_convertida": base_query.filter(Lead.step_venda_convertida == True).count(),
     }
     
     by_status = {
-        "novo": base_query.filter(Lead.status == "novo").count(),
-        "contatado": base_query.filter(Lead.status == "contatado").count(),
-        "convertido": base_query.filter(Lead.status == "convertido").count(),
-        "perdido": base_query.filter(Lead.status == "perdido").count(),
+        "novo": base_query.filter(Lead.status == LeadStatus.NOVO).count(),
+        "em_contato": base_query.filter(Lead.status == LeadStatus.EM_CONTATO).count(),
+        "proposta_enviada": base_query.filter(Lead.status == LeadStatus.PROPOSTA_ENVIADA).count(),
+        "fechado": base_query.filter(Lead.status == LeadStatus.FECHADO).count(),
+        "perdido": base_query.filter(Lead.status == LeadStatus.PERDIDO).count(),
     }
     
     # Taxa de conversão (vendas convertidas / total)

@@ -16,8 +16,10 @@ from app.dao import conversation_dao, lead_dao, profile_dao
 from app.dao.conversation_dao import get_or_create_open
 from app.dao.message_dao import create_message, get_messages_by_conversation_id
 from app.dao.profile_dao import get_or_create
+from app.entities.conversation_entity import ConversationStatus
 from app.schemas.webhook_schemas import WebhookPayload
 from app.services.gemini_service import ChatMessage, GeminiService, GeminiServiceError, get_gemini_service
+from app.services.langgraph_service import get_langgraph_service, LangGraphService
 from app.services.lead_scoring_service import LeadData, get_lead_scoring_service
 from app.services.whatsapp_service import WhatsAppService, whatsapp_service
 from app.utils.settings import settings
@@ -53,6 +55,11 @@ class MessageHandler:
     
     Agrupa mensagens recebidas em sequência antes de processar,
     evitando múltiplas chamadas à IA para mensagens fragmentadas.
+    
+    Usa LangGraph para orquestração de agentes:
+    - qualify: extrai dados e cria lead
+    - first_contact: discovery e qualificação
+    - conversion: handoff para consultor
     """
 
     def __init__(
@@ -61,6 +68,7 @@ class MessageHandler:
         history_limit: int | None = None,
         whatsapp: WhatsAppService | None = None,
         gemini: GeminiService | None = None,
+        langgraph: LangGraphService | None = None,
     ):
         self.timeout = timeout or settings.message_consolidation_timeout
         self.history_limit = history_limit or settings.message_history_limit
@@ -71,6 +79,7 @@ class MessageHandler:
         )
         self.whatsapp = whatsapp or whatsapp_service
         self._gemini = gemini
+        self._langgraph = langgraph
         self._pending_messages: dict[str, PendingMessage] = {}
         self._lock = threading.Lock()
 
@@ -80,6 +89,13 @@ class MessageHandler:
         if self._gemini is None:
             self._gemini = get_gemini_service()
         return self._gemini
+
+    @property
+    def langgraph(self) -> LangGraphService:
+        """Lazy loading do LangGraphService."""
+        if self._langgraph is None:
+            self._langgraph = get_langgraph_service()
+        return self._langgraph
 
     def _validate_message(self, pending: PendingMessage, consolidated_text: str) -> bool:
         """Verifica se a mensagem não é repetida."""
@@ -272,7 +288,7 @@ class MessageHandler:
         conversation_id,
     ) -> None:
         """
-        Processa mensagens consolidadas após o timeout.
+        Processa mensagens consolidadas após o timeout usando LangGraph.
         
         Chamado pelo timer em uma thread separada.
         Inclui delay humanizado antes de enviar a resposta.
@@ -294,6 +310,12 @@ class MessageHandler:
             # Usa uma nova sessão do banco
             db = db_factory()
             try:
+                # Verifica se conversa ainda está em modo "open"
+                conversation = conversation_dao.get_by_id(db, conversation_id)
+                if not conversation or conversation.status != ConversationStatus.OPEN:
+                    logger.info(f"Conversa {conversation_id} não está open, ignorando processamento")
+                    return
+                
                 # Persiste a mensagem consolidada do usuário
                 create_message(
                     db,
@@ -303,41 +325,86 @@ class MessageHandler:
                     content=consolidated_text,
                 )
 
-                # Busca histórico e gera resposta
+                # Busca histórico para o LangGraph
                 history = self._build_chat_history(db, conversation_id)
+                messages_for_graph = [
+                    {"role": msg.role, "content": msg.content}
+                    for msg in history
+                ]
+                
+                # Verifica se já existe lead para esta conversa ou profile
+                existing_lead = lead_dao.get_by_conversation_id(db, conversation_id)
+                if not existing_lead:
+                    # Verifica se profile tem lead de conversa anterior
+                    existing_lead = lead_dao.get_by_profile_id(db, profile_id)
+                
+                # Determina estágio inicial
+                if existing_lead:
+                    lead_info = {
+                        "nome_cliente": existing_lead.nome_cliente,
+                        "nome_empresa": existing_lead.nome_empresa,
+                        "cargo": existing_lead.cargo,
+                        "tags": existing_lead.tags or [],
+                    }
+                    # Se lead existe, começa em first_contact
+                    pipeline_stage = "first_contact"
+                    lead_id = str(existing_lead.id)
+                else:
+                    lead_info = None
+                    pipeline_stage = "qualify"
+                    lead_id = None
+                
+                # Conta mensagens do usuário
+                user_message_count = len([m for m in messages_for_graph if m["role"] == "user"])
                 
                 try:
-                    # Gera resposta usando instruções do arquivo
-                    response_text = self.gemini.chat(history)
-                except GeminiServiceError as e:
-                    logger.error(f"Erro ao chamar Gemini: {e}")
-                    response_text = "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente."
-
-                # Processa comandos BGX (tags, criação de lead) e limpa o texto
-                clean_response = self._parse_bgx_commands(
-                    response_text,
-                    db,
-                    conversation_id,
-                    profile_id,
-                    wa_id,  # wa_id é o telefone do cliente
-                )
+                    # Processa via LangGraph
+                    result = self.langgraph.process_message(
+                        messages=messages_for_graph,
+                        profile_id=str(profile_id),
+                        conversation_id=str(conversation_id),
+                        lead_id=lead_id,
+                        lead_info=lead_info,
+                        pipeline_stage=pipeline_stage,
+                        user_message_count=user_message_count,
+                    )
+                    
+                    response_text = result.get("response", "")
+                    
+                    # Processa ações do LangGraph
+                    self._process_langgraph_actions(
+                        db, dict(result), conversation_id, profile_id, wa_id
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao chamar LangGraph: {e}")
+                    # Fallback para Gemini tradicional
+                    try:
+                        response_text = self.gemini.chat(history)
+                        # Processa comandos BGX (modo legado)
+                        response_text = self._parse_bgx_commands(
+                            response_text, db, conversation_id, profile_id, wa_id
+                        )
+                    except GeminiServiceError as e:
+                        logger.error(f"Erro ao chamar Gemini: {e}")
+                        response_text = "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente."
 
                 # Aplica delay humanizado antes de enviar (>10s, <timeout)
                 delay = self._calculate_humanized_delay()
                 logger.debug(f"Aplicando delay humanizado de {delay:.1f}s para {wa_id}")
                 time.sleep(delay)
 
-                # Envia resposta via WhatsApp (sem os comandos BGX)
-                if clean_response:
-                    self.whatsapp.send_text_message(wa_id, clean_response)
+                # Envia resposta via WhatsApp
+                if response_text:
+                    self.whatsapp.send_text_message(wa_id, response_text)
 
-                # Persiste a resposta do agente (texto original com comandos para auditoria)
+                # Persiste a resposta do agente
                 create_message(
                     db,
                     conversation_id=conversation_id,
                     profile_id=profile_id,
                     role="agent",
-                    content=clean_response or response_text,
+                    content=response_text or "",
                 )
 
                 logger.info(f"Mensagem processada para {wa_id}")
@@ -347,6 +414,86 @@ class MessageHandler:
 
         except Exception as e:
             logger.error(f"Erro ao processar mensagem consolidada: {e}")
+    
+    def _process_langgraph_actions(
+        self,
+        db: Session,
+        result: dict,
+        conversation_id: uuid.UUID,
+        profile_id: uuid.UUID,
+        profile_phone: str,
+    ) -> None:
+        """
+        Processa ações retornadas pelo LangGraph.
+        
+        - Cria lead se should_create_lead
+        - Ativa human takeover se should_human_takeover
+        - Adiciona tags ao lead/conversa
+        """
+        try:
+            # Verifica se deve criar lead
+            if result.get("should_create_lead") and result.get("lead"):
+                lead_data = result["lead"]
+                existing_lead = lead_dao.get_by_conversation_id(db, conversation_id)
+                
+                if not existing_lead:
+                    # Calcula score
+                    scoring_service = get_lead_scoring_service()
+                    lead_data_obj = LeadData(
+                        nome_cliente=lead_data.get("nome_cliente"),
+                        nome_empresa=lead_data.get("nome_empresa"),
+                        cargo=lead_data.get("cargo"),
+                        telefone=profile_phone,
+                        tags=lead_data.get("tags", []),
+                        notes=lead_data.get("notes"),
+                    )
+                    score_result = scoring_service.calculate_score(db, conversation_id, lead_data_obj)
+                    score = score_result.get("score", 50)
+                    
+                    # Cria o lead
+                    lead = lead_dao.create_lead(
+                        db,
+                        conversation_id=conversation_id,
+                        profile_id=profile_id,
+                        telefone=profile_phone,
+                        nome_cliente=lead_data.get("nome_cliente"),
+                        nome_empresa=lead_data.get("nome_empresa"),
+                        cargo=lead_data.get("cargo"),
+                        tags=lead_data.get("tags", []),
+                        score=score,
+                        notes=score_result.get("justificativa"),
+                    )
+                    logger.info(f"Lead criado via LangGraph: {lead.id}")
+                    
+                    # Adiciona tags à conversa e profile
+                    for tag in lead_data.get("tags", []):
+                        self._add_tag_to_conversation_and_profile(
+                            db, conversation_id, profile_id, tag
+                        )
+            
+            # Verifica se deve ativar human takeover
+            if result.get("should_human_takeover"):
+                conversation_dao.set_human_takeover(db, conversation_id)
+                logger.info(f"Human takeover ativado para conversa {conversation_id}")
+                
+                # Atualiza lead se existir
+                lead = lead_dao.get_by_conversation_id(db, conversation_id)
+                if lead:
+                    lead_dao.update_lead(
+                        db,
+                        lead.id,
+                        step_orcamento_realizado=True,
+                    )
+                    
+                    # Se score baixo, adiciona tag "frio"
+                    if result.get("current_score", 50) < 30:
+                        self._add_tag_to_conversation_and_profile(
+                            db, conversation_id, profile_id, "frio"
+                        )
+                        lead_dao.update_lead(db, lead.id, tags=list(set(lead.tags + ["frio"])))
+                        
+        except Exception as e:
+            logger.error(f"Erro ao processar ações do LangGraph: {e}")
 
     def _schedule_processing(
         self,
@@ -385,6 +532,7 @@ class MessageHandler:
         Processa uma mensagem de texto recebida.
         
         Adiciona à fila de consolidação e agenda processamento.
+        Se conversa está em status 'human', apenas persiste sem responder.
         """
         # Obtém ou cria profile e conversa
         profile = get_or_create(db, wa_id, None)
@@ -392,6 +540,19 @@ class MessageHandler:
 
         # Marca como lida
         self.whatsapp.mark_as_read(message_id)
+        
+        # Se conversa está em modo "human", apenas persiste a mensagem
+        # O consultor verá no front, mas a IA não responde
+        if conversation.status == ConversationStatus.HUMAN:
+            create_message(
+                db,
+                conversation_id=conversation.id,
+                profile_id=profile.id,
+                role="user",
+                content=text,
+            )
+            logger.info(f"Mensagem de {wa_id} persistida (modo human takeover)")
+            return
 
         # Adiciona à fila de consolidação
         import time

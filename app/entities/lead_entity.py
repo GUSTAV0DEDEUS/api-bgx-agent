@@ -11,6 +11,15 @@ from sqlalchemy.sql import func
 from app.utils.db import Base
 
 
+class LeadStatus:
+    """Status possíveis para um lead no pipeline."""
+    NOVO = "novo"                      # Lead recém criado
+    EM_CONTATO = "em_contato"          # Em processo de qualificação
+    PROPOSTA_ENVIADA = "proposta_enviada"  # Orçamento/proposta enviado
+    FECHADO = "fechado"                # Venda realizada
+    PERDIDO = "perdido"                # Cliente desistiu/recusou
+
+
 class Lead(Base):
     """Entity para leads qualificados gerados ao encerrar conversas."""
 
@@ -36,12 +45,13 @@ class Lead(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status geral
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="novo")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=LeadStatus.NOVO)
 
     # Pipeline de vendas (checklist de steps)
     step_novo_lead: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     step_primeiro_contato: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_orcamento_realizado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    step_orcamento_aceito: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_orcamento_recusado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_venda_convertida: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 

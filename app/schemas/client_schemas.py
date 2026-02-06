@@ -73,3 +73,8 @@ class MessageResponse(BaseModel):
 class AddTagRequest(BaseModel):
     """Request para adicionar tag."""
     tag: str = Field(..., min_length=1, max_length=32)
+
+
+class CloseConversationRequest(BaseModel):
+    """Request para fechar uma conversa."""
+    reason: str | None = Field(default=None, max_length=500, description="Motivo do encerramento")

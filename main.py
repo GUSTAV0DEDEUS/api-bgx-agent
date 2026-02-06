@@ -23,17 +23,9 @@ app = FastAPI(
 )
 
 # Configuração de CORS
-# Permite todos os subdomínios do Vercel e localhost
-allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://bgxagentic.vercel.app",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",  # Permite todos os previews da Vercel
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -117,7 +117,7 @@ Extrair naturalmente durante a conversa:
 ## REGRAS
 1. NÃO pergunte tudo de uma vez - extraia nas respostas naturais
 2. Quando tiver os 3 dados (nome, empresa, cargo), inclua no final:
-   [LEAD_DATA]{"nome_cliente": "...", "nome_empresa": "...", "cargo": "..."}[/LEAD_DATA]
+   [LEAD_DATA]{{"nome_cliente": "...", "nome_empresa": "...", "cargo": "..."}}[/LEAD_DATA]
 3. Se o cliente demonstrar desinteresse forte (score < 30), inclua:
    [NEGATIVE_SIGNAL]true[/NEGATIVE_SIGNAL]
 4. Continue a conversa normalmente após extrair dados
@@ -155,7 +155,7 @@ FIRST_CONTACT_PROMPT = """Você é um agente de vendas da BGX Group.
 3. Se cliente mostrar resistência ou desinteresse, inclua:
    [NEGATIVE_SIGNAL]true[/NEGATIVE_SIGNAL]
 4. Atualize tags quando identificar comportamento:
-   [ADD_TAG]{"tag": "quente"}[/ADD_TAG]
+   [ADD_TAG]{{"tag": "quente"}}[/ADD_TAG]
 
 ## CONTEXTO DO LEAD
 Nome: {nome_cliente}

@@ -328,110 +328,141 @@ class LangGraphService:
     
     def _qualify_node(self, state: ConversationState) -> ConversationState:
         """Node de qualificação - extrai dados do lead."""
-        context = self._format_context(state["messages"])
-        
-        prompt = _safe_format(QUALIFY_PROMPT, context=context)
-        
-        messages = [
-            SystemMessage(content=prompt),
-            *state["messages"]
-        ]
-        
-        response = self.llm.invoke(messages)
-        response_text = response.content
-        
-        # Processa resposta
-        new_state = dict(state)
-        new_state["response"] = response_text
-        
-        # Extrai dados do lead se presente
-        if "[LEAD_DATA]" in response_text and "[/LEAD_DATA]" in response_text:
-            try:
-                start = response_text.index("[LEAD_DATA]") + len("[LEAD_DATA]")
-                end = response_text.index("[/LEAD_DATA]")
-                lead_json = response_text[start:end].strip()
-                lead_data = json.loads(lead_json)
-                
-                new_state["lead"] = lead_data
-                new_state["should_create_lead"] = True
-                
-                # Limpa marcadores da resposta
-                response_text = response_text.replace(f"[LEAD_DATA]{lead_json}[/LEAD_DATA]", "").strip()
-                new_state["response"] = response_text
-                
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"Erro ao parsear LEAD_DATA: {e}")
-        
-        # Verifica sinal negativo
-        new_state = self._check_negative_signal(new_state, response_text)
-        
-        return cast(ConversationState, new_state)
+        logger.info("Entrando no qualify_node")
+        try:
+            context = self._format_context(state["messages"])
+            logger.debug(f"Contexto formatado: {context[:200]}...")
+            
+            prompt = _safe_format(QUALIFY_PROMPT, context=context)
+            logger.debug("Prompt formatado com sucesso")
+            
+            messages = [
+                SystemMessage(content=prompt),
+                *state["messages"]
+            ]
+            
+            response = self.llm.invoke(messages)
+            response_text = response.content
+            
+            # Processa resposta
+            new_state = dict(state)
+            new_state["response"] = response_text
+            
+            # Extrai dados do lead se presente
+            if "[LEAD_DATA]" in response_text and "[/LEAD_DATA]" in response_text:
+                try:
+                    start = response_text.index("[LEAD_DATA]") + len("[LEAD_DATA]")
+                    end = response_text.index("[/LEAD_DATA]")
+                    lead_json = response_text[start:end].strip()
+                    lead_data = json.loads(lead_json)
+                    
+                    new_state["lead"] = lead_data
+                    new_state["should_create_lead"] = True
+                    
+                    # Limpa marcadores da resposta
+                    response_text = response_text.replace(f"[LEAD_DATA]{lead_json}[/LEAD_DATA]", "").strip()
+                    new_state["response"] = response_text
+                    
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Erro ao parsear LEAD_DATA: {e}")
+            
+            # Verifica sinal negativo
+            new_state = self._check_negative_signal(new_state, response_text)
+            
+            logger.info(f"qualify_node concluído. should_create_lead={new_state.get('should_create_lead')}")
+            return cast(ConversationState, new_state)
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"Erro no qualify_node: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
     
     def _first_contact_node(self, state: ConversationState) -> ConversationState:
         """Node de primeiro contato - discovery e qualificação."""
-        lead = state.get("lead")
-        context = self._format_context(state["messages"])
-        
-        prompt = _safe_format(
-            FIRST_CONTACT_PROMPT,
-            nome_cliente=_get_lead_field(lead, "nome_cliente"),
-            nome_empresa=_get_lead_field(lead, "nome_empresa"),
-            cargo=_get_lead_field(lead, "cargo"),
-            context=context,
-        )
-        
-        messages = [
-            SystemMessage(content=prompt),
-            *state["messages"]
-        ]
-        
-        response = self.llm.invoke(messages)
-        response_text = response.content
-        
-        new_state = dict(state)
-        new_state["response"] = response_text
-        
-        # Verifica se está pronto para proposta
-        if "[READY_FOR_PROPOSAL]true[/READY_FOR_PROPOSAL]" in response_text:
-            new_state["pipeline_stage"] = "conversion"
-            new_state["should_human_takeover"] = True
-            response_text = response_text.replace("[READY_FOR_PROPOSAL]true[/READY_FOR_PROPOSAL]", "").strip()
+        logger.info("Entrando no first_contact_node")
+        try:
+            lead = state.get("lead")
+            context = self._format_context(state["messages"])
+            logger.debug(f"Lead info: {lead}")
+            
+            prompt = _safe_format(
+                FIRST_CONTACT_PROMPT,
+                nome_cliente=_get_lead_field(lead, "nome_cliente"),
+                nome_empresa=_get_lead_field(lead, "nome_empresa"),
+                cargo=_get_lead_field(lead, "cargo"),
+                context=context,
+            )
+            
+            messages = [
+                SystemMessage(content=prompt),
+                *state["messages"]
+            ]
+            
+            response = self.llm.invoke(messages)
+            response_text = response.content
+            
+            new_state = dict(state)
             new_state["response"] = response_text
-        
-        # Verifica sinal negativo
-        new_state = self._check_negative_signal(new_state, response_text)
-        
-        # Extrai tags
-        new_state = self._extract_tags(new_state, response_text)
-        
-        return cast(ConversationState, new_state)
+            
+            # Verifica se está pronto para proposta
+            if "[READY_FOR_PROPOSAL]true[/READY_FOR_PROPOSAL]" in response_text:
+                new_state["pipeline_stage"] = "conversion"
+                new_state["should_human_takeover"] = True
+                response_text = response_text.replace("[READY_FOR_PROPOSAL]true[/READY_FOR_PROPOSAL]", "").strip()
+                new_state["response"] = response_text
+            
+            # Verifica sinal negativo
+            new_state = self._check_negative_signal(new_state, response_text)
+            
+            # Extrai tags
+            new_state = self._extract_tags(new_state, response_text)
+            
+            logger.info(f"first_contact_node concluído. should_human_takeover={new_state.get('should_human_takeover')}")
+            return cast(ConversationState, new_state)
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"Erro no first_contact_node: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
     
     def _conversion_node(self, state: ConversationState) -> ConversationState:
         """Node de conversão - prepara handoff para consultor."""
-        lead = state.get("lead")
-        context = self._format_context(state["messages"])
-        
-        prompt = _safe_format(
-            CONVERSION_PROMPT,
-            nome_cliente=_get_lead_field(lead, "nome_cliente"),
-            nome_empresa=_get_lead_field(lead, "nome_empresa"),
-            cargo=_get_lead_field(lead, "cargo"),
-            context=context,
-        )
-        
-        messages = [
-            SystemMessage(content=prompt),
-            *state["messages"]
-        ]
-        
-        response = self.llm.invoke(messages)
-        
-        new_state = dict(state)
-        new_state["response"] = response.content
-        new_state["should_human_takeover"] = True
-        new_state["pipeline_stage"] = "conversion"
-        
-        return cast(ConversationState, new_state)
+        logger.info("Entrando no conversion_node")
+        try:
+            lead = state.get("lead")
+            context = self._format_context(state["messages"])
+            logger.debug(f"Lead info: {lead}")
+            
+            prompt = _safe_format(
+                CONVERSION_PROMPT,
+                nome_cliente=_get_lead_field(lead, "nome_cliente"),
+                nome_empresa=_get_lead_field(lead, "nome_empresa"),
+                cargo=_get_lead_field(lead, "cargo"),
+                context=context,
+            )
+            
+            messages = [
+                SystemMessage(content=prompt),
+                *state["messages"]
+            ]
+            
+            response = self.llm.invoke(messages)
+            
+            new_state = dict(state)
+            new_state["response"] = response.content
+            new_state["should_human_takeover"] = True
+            new_state["pipeline_stage"] = "conversion"
+            
+            logger.info("conversion_node concluído")
+            return cast(ConversationState, new_state)
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"Erro no conversion_node: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
     
     def _check_negative_signal(self, state: dict, response_text: str) -> dict:
         """Verifica e processa sinais negativos."""
@@ -532,10 +563,14 @@ class LangGraphService:
         
         # Executa o grafo
         try:
+            logger.info(f"Iniciando LangGraph para conversation {conversation_id}, stage: {pipeline_stage}")
             result = self.graph.invoke(initial_state)
+            logger.info(f"LangGraph concluído com sucesso. Response: {result.get('response', '')[:100]}...")
             return result
         except Exception as e:
+            import traceback
             logger.error(f"Erro ao processar mensagem no LangGraph: {e}")
+            logger.error(f"Traceback completo: {traceback.format_exc()}")
             # Retorna estado com erro
             initial_state["response"] = "Desculpe, ocorreu um erro. Pode repetir?"
             return initial_state

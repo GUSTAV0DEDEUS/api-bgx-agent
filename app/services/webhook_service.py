@@ -67,9 +67,12 @@ class MessageHandler:
         self.timeout = timeout or settings.message_consolidation_timeout
         self.history_limit = history_limit or settings.message_history_limit
         self.min_delay = settings.min_response_delay
-        self.max_delay = min(
-            settings.max_response_delay,
-            settings.message_consolidation_timeout - 5
+        self.max_delay = max(
+            self.min_delay,
+            min(
+                settings.max_response_delay,
+                settings.message_consolidation_timeout - 5,
+            ),
         )
         self.whatsapp = whatsapp or whatsapp_service
         self._gemini = gemini
@@ -106,6 +109,8 @@ class MessageHandler:
         ]
 
     def _calculate_humanized_delay(self) -> float:
+        if self.max_delay <= 0:
+            return 0
         return random.uniform(self.min_delay, self.max_delay)
 
     def _send_split_messages(self, wa_id: str, text: str, max_length: int = 300) -> None:
@@ -266,8 +271,14 @@ class MessageHandler:
                         "cargo": existing_lead.cargo,
                         "tags": existing_lead.tags or [],
                     }
-                    pipeline_stage = "first_contact"
                     lead_id = str(existing_lead.id)
+
+                    # Mapeia status do lead para pipeline_stage
+                    if existing_lead.status == LeadStatus.EM_NEGOCIACAO:
+                        pipeline_stage = "negotiation"
+                    else:
+                        pipeline_stage = "first_contact"
+
                     # Usa first_name do lead se disponivel
                     if existing_lead.nome_cliente:
                         first_name = existing_lead.nome_cliente

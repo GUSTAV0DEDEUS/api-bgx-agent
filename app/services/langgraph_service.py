@@ -216,8 +216,7 @@ class LangGraphService:
         """Roteamento após first_contact."""
         if state.get("should_human_takeover"):
             return "human"
-        response = state.get("response", "")
-        if "[NEGOTIATION_DETECTED]true[/NEGOTIATION_DETECTED]" in response:
+        if state.get("pipeline_stage") == "negotiation":
             return "negotiation"
         return "first_contact"
 
@@ -311,10 +310,10 @@ class LangGraphService:
             new_state = dict(state)
             new_state["response"] = response_text
 
-            # Detecta intenção de negociação
+            # Detecta intenção de negociação → roteia para negotiation_node
+            # NÃO seta should_human_takeover aqui; o negotiation_node cuida disso
             if "[NEGOTIATION_DETECTED]true[/NEGOTIATION_DETECTED]" in response_text:
                 new_state["pipeline_stage"] = "negotiation"
-                new_state["should_human_takeover"] = True
                 response_text = response_text.replace(
                     "[NEGOTIATION_DETECTED]true[/NEGOTIATION_DETECTED]", ""
                 ).strip()

@@ -83,16 +83,20 @@ def _load_prompt(filename: str) -> str:
 
 
 def _safe_format(template: str, **kwargs) -> str:
-    """Formata template de forma segura, escapando chaves em valores."""
-    safe_kwargs = {}
+    """Formata template de forma segura, substituindo apenas placeholders conhecidos.
+
+    Usa substituição manual em vez de str.format() para evitar KeyError
+    quando o template contém chaves literais (ex: JSON nos exemplos do prompt).
+    """
+    result = template
     for key, value in kwargs.items():
+        placeholder = "{" + key + "}"
         if value is None:
-            safe_kwargs[key] = "Não informado"
-        elif isinstance(value, str):
-            safe_kwargs[key] = value.replace("{", "{{").replace("}", "}}")
+            replacement = "Não informado"
         else:
-            safe_kwargs[key] = str(value)
-    return template.format(**safe_kwargs)
+            replacement = str(value)
+        result = result.replace(placeholder, replacement)
+    return result
 
 
 def _get_lead_field(lead: Any, field_name: str, default: str = "Não informado") -> str:

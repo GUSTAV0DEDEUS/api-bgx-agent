@@ -30,7 +30,7 @@ Seu objetivo é iniciar uma conversa natural e acolhedora com o cliente que acab
 ## MARCADORES OBRIGATÓRIOS
 Quando tiver os 3 dados (nome, empresa, cargo), inclua no final da sua resposta:
 ```
-[LEAD_DATA]{{"first_name": "...", "last_name": "..." ou null, "nome_empresa": "...", "cargo": "..."}}[/LEAD_DATA]
+[LEAD_DATA]{"first_name": "...", "last_name": "..." ou null, "nome_empresa": "...", "cargo": "..."}[/LEAD_DATA]
 ```
 
 Se o cliente demonstrar forte desinteresse ou hostilidade, inclua:

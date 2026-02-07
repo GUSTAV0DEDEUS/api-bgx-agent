@@ -10,6 +10,8 @@ class ProfileWithTags(BaseModel):
     """Profile com tags para listagem."""
     id: uuid.UUID
     whatsapp_number: str
+    first_name: str | None
+    last_name: str | None
     display_name: str | None
     tags: list[str]
     created_at: datetime

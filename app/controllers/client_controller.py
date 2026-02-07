@@ -42,6 +42,8 @@ def list_clients(
         ProfileWithTags(
             id=p.id,
             whatsapp_number=p.whatsapp_number,
+            first_name=p.first_name,
+            last_name=p.last_name,
             display_name=p.display_name,
             tags=p.tags or [],
             created_at=p.created_at, # type: ignore
@@ -76,6 +78,8 @@ def get_client_detail(
     profile_response = ProfileWithTags(
         id=profile.id,
         whatsapp_number=profile.whatsapp_number,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
         display_name=profile.display_name,
         tags=profile.tags or [],
         created_at=profile.created_at, # type: ignore
@@ -194,6 +198,8 @@ def add_client_tag(
     return ProfileWithTags(
         id=profile.id,
         whatsapp_number=profile.whatsapp_number,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
         display_name=profile.display_name,
         tags=profile.tags or [],
         created_at=profile.created_at, # type: ignore
@@ -217,6 +223,8 @@ def remove_client_tag(
     return ProfileWithTags(
         id=profile.id,
         whatsapp_number=profile.whatsapp_number,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
         display_name=profile.display_name,
         tags=profile.tags or [],
         created_at=profile.created_at, # type: ignore

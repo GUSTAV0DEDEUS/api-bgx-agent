@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.controllers.webhook_controller import router as webhook_router
 from app.controllers.client_controller import router as client_router
 from app.controllers.lead_controller import router as lead_router
+from app.controllers.message_controller import router as message_router
+from app.controllers.agent_config_controller import router as agent_config_router
 
 
 # Configura logging
@@ -35,3 +37,5 @@ app.add_middleware(
 app.include_router(webhook_router)
 app.include_router(client_router)
 app.include_router(lead_router)
+app.include_router(message_router)
+app.include_router(agent_config_router)

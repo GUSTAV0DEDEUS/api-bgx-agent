@@ -15,6 +15,7 @@ class LeadStatus:
     """Status possíveis para um lead no pipeline."""
     NOVO = "novo"                      # Lead recém criado
     EM_CONTATO = "em_contato"          # Em processo de qualificação
+    EM_NEGOCIACAO = "em_negociacao"    # Cliente pediu reunião/orçamento, humano assume
     PROPOSTA_ENVIADA = "proposta_enviada"  # Orçamento/proposta enviado
     FECHADO = "fechado"                # Venda realizada
     PERDIDO = "perdido"                # Cliente desistiu/recusou

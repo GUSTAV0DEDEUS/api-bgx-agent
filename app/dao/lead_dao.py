@@ -214,6 +214,7 @@ def get_metrics(db: Session) -> dict:
     by_status = {
         "novo": base_query.filter(Lead.status == LeadStatus.NOVO).count(),
         "em_contato": base_query.filter(Lead.status == LeadStatus.EM_CONTATO).count(),
+        "em_negociacao": base_query.filter(Lead.status == LeadStatus.EM_NEGOCIACAO).count(),
         "proposta_enviada": base_query.filter(Lead.status == LeadStatus.PROPOSTA_ENVIADA).count(),
         "fechado": base_query.filter(Lead.status == LeadStatus.FECHADO).count(),
         "perdido": base_query.filter(Lead.status == LeadStatus.PERDIDO).count(),

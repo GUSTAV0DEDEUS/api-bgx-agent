@@ -15,7 +15,8 @@ class Profile(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     whatsapp_number: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
-    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(
@@ -25,3 +26,10 @@ class Profile(Base):
     conversations = relationship("Conversation", back_populates="profile", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="profile", cascade="all, delete-orphan")
     leads = relationship("Lead", back_populates="profile", cascade="all, delete-orphan")
+
+    @property
+    def display_name(self) -> str | None:
+        """Nome completo para exibição (compatibilidade)."""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name

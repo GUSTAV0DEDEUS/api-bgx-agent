@@ -60,6 +60,7 @@ class ConversationState(TypedDict):
     current_score: int
     response: str
     first_name: str | None
+    lead_analysis: dict | None
     tone_instructions: str
     emoji_instructions: str
     greeting_instructions: str
@@ -310,6 +311,9 @@ class LangGraphService:
             new_state = dict(state)
             new_state["response"] = response_text
 
+            # Extrai análise do lead (memória de cálculo)
+            new_state = self._extract_lead_analysis(new_state, response_text)
+
             # Detecta intenção de negociação → roteia para negotiation_node
             # NÃO seta should_human_takeover aqui; o negotiation_node cuida disso
             if "[NEGOTIATION_DETECTED]true[/NEGOTIATION_DETECTED]" in response_text:
@@ -407,6 +411,23 @@ class LangGraphService:
         state["response"] = re.sub(tag_pattern, "", state.get("response", "")).strip()
         return state
 
+    def _extract_lead_analysis(self, state: dict, response_text: str) -> dict:
+        """Extrai análise do lead (memória de cálculo) e remove do texto."""
+        import re
+        pattern = r'\[LEAD_ANALYSIS\]\s*(\{.*?\})\s*\[/LEAD_ANALYSIS\]'
+        matches = re.findall(pattern, response_text, re.DOTALL)
+
+        for match in matches:
+            try:
+                analysis = json.loads(match)
+                state["lead_analysis"] = analysis
+                logger.info(f"Lead analysis: {analysis}")
+            except json.JSONDecodeError:
+                pass
+
+        state["response"] = re.sub(pattern, "", state.get("response", "")).strip()
+        return state
+
     # ============================================
     # ENTRY POINT PÚBLICO
     # ============================================
@@ -447,6 +468,7 @@ class LangGraphService:
             "negative_score_count": 0,
             "current_score": 50,
             "response": "",
+            "lead_analysis": None,
             "first_name": first_name,
             "tone_instructions": tone_instructions,
             "emoji_instructions": emoji_instructions,

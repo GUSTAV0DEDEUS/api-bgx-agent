@@ -9,47 +9,40 @@ from app.entities.profile_entity import Profile
 
 MAX_PROFILE_TAGS = 3
 
-# Prefixos de nomes compostos comuns em português brasileiro.
-# Se o primeiro token estiver nessa lista e houver exatamente 2 tokens,
-# o nome completo é tratado como first_name (ex: "Maria Eduarda").
-COMPOUND_NAME_PREFIXES = {
-    "maria", "ana", "joão", "joao", "josé", "jose",
-    "pedro", "luis", "luiz", "carlos", "paulo",
-    "marcos", "julio", "júlio", "antonio", "antônio",
-    "francisco", "jean", "john", "mary",
-}
+
+def extract_first_name_only(full_name: str | None) -> str | None:
+    """Extrai apenas o primeiro nome de um nome completo.
+    
+    Exemplos:
+    - "Gustavo de Deus Conceição" -> "Gustavo"
+    - "Maria Eduarda Silva" -> "Maria"
+    - "João" -> "João"
+    """
+    if not full_name or not full_name.strip():
+        return None
+    
+    parts = full_name.strip().split()
+    return parts[0] if parts else None
 
 
 def parse_display_name(display_name: str | None) -> tuple[str | None, str | None]:
     """
-    Faz parse inteligente do display_name do WhatsApp em first_name e last_name.
-
+    Faz parse simples do display_name em first_name e last_name.
+    
     Regras:
-    - Se for None ou vazio -> (None, None)
-    - Se for um unico nome -> (nome, None)
-    - Se forem 2 nomes e o primeiro for prefixo composto -> (ambos juntos, None)
-    - Se forem 2 nomes normais -> (primeiro, segundo)
-    - Se forem 3+ nomes -> (primeiro, restante)
-    - Nomes compostos com prefixo: "Maria Eduarda Silva" -> ("Maria Eduarda", "Silva")
+    - Primeiro token = first_name
+    - Resto = last_name
     """
     if not display_name or not display_name.strip():
         return None, None
 
     parts = display_name.strip().split()
 
+    if not parts:
+        return None, None
+    
     if len(parts) == 1:
         return parts[0], None
-
-    first_lower = parts[0].lower()
-
-    if len(parts) == 2:
-        if first_lower in COMPOUND_NAME_PREFIXES:
-            return f"{parts[0]} {parts[1]}", None
-        return parts[0], parts[1]
-
-    # 3+ partes: verifica se as duas primeiras formam nome composto
-    if first_lower in COMPOUND_NAME_PREFIXES:
-        return f"{parts[0]} {parts[1]}", " ".join(parts[2:])
 
     return parts[0], " ".join(parts[1:])
 

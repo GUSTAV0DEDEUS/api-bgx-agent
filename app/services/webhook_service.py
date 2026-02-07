@@ -358,8 +358,12 @@ class MessageHandler:
                 existing_lead = lead_dao.get_by_conversation_id(db, conversation_id)
                 if not existing_lead:
                     profile = profile_dao.get_by_id(db, profile_id)
-                    first_name = lead_data.get("first_name")
+                    first_name_raw = lead_data.get("first_name")
                     last_name = lead_data.get("last_name")
+
+                    # Garante que first_name contenha apenas o primeiro nome
+                    # (em caso do agente extrair nome completo)
+                    first_name = profile_dao.extract_first_name_only(first_name_raw) if first_name_raw else None
 
                     # Se o contato não tem nome e o lead tem, copia para o contato
                     if profile and first_name and not profile.first_name:
@@ -410,9 +414,34 @@ class MessageHandler:
                 if lead:
                     pipeline_stage = result.get("pipeline_stage", "")
                     if pipeline_stage == "negotiation":
-                        # Cliente pediu reuniao/orcamento -> em_negociacao
-                        lead_dao.update_lead(db, lead.id, status=LeadStatus.EM_NEGOCIACAO)
-                        logger.info(f"Lead {lead.id} movido para em_negociacao")
+                        # Roda scoring antes de mover para negociação
+                        try:
+                            scoring_service = get_lead_scoring_service()
+                            lead_data_obj = LeadData(
+                                nome_cliente=lead.nome_cliente,
+                                nome_empresa=lead.nome_empresa,
+                                cargo=lead.cargo,
+                                telefone=lead.telefone,
+                                tags=lead.tags or [],
+                                notes=lead.notes,
+                            )
+                            score_result = scoring_service.calculate_score(db, conversation_id, lead_data_obj)
+                            new_score = score_result.get("score", lead.score or 50)
+                            justificativa = score_result.get("justificativa", "")
+                            notes = lead.notes or ""
+                            if justificativa:
+                                notes = f"{notes}\n\n[Scoring negociação]: {justificativa}".strip()
+                            lead_dao.update_lead(
+                                db, lead.id,
+                                status=LeadStatus.EM_NEGOCIACAO,
+                                score=new_score,
+                                notes=notes,
+                            )
+                            logger.info(f"Lead {lead.id} movido para em_negociacao com score {new_score}")
+                        except Exception as e:
+                            logger.error(f"Erro ao rodar scoring na negociação: {e}")
+                            lead_dao.update_lead(db, lead.id, status=LeadStatus.EM_NEGOCIACAO)
+                            logger.info(f"Lead {lead.id} movido para em_negociacao (sem scoring)")
                     elif result.get("current_score", 50) < 30:
                         # Lead frio
                         self._add_tag_to_conversation_and_profile(

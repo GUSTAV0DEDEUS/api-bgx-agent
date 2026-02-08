@@ -29,7 +29,7 @@ class Settings:
     gemini_api_key: str | None = os.getenv("GEMINI_API_KEY")
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_base_url: str | None = os.getenv("OPENAI_BASE_URL")
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model: str = os.getenv("MODEL", "gemini-2.5-flash-lite")
 
     # Message Handler Config
     message_history_limit: int = int(os.getenv("MESSAGE_HISTORY_LIMIT", "20"))

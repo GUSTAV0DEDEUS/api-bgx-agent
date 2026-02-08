@@ -38,7 +38,7 @@ class AIService:
     ):
         self.api_key = api_key or settings.openai_api_key or settings.gemini_api_key
         self.base_url = base_url or settings.openai_base_url
-        self.model = model or settings.openai_model
+        self.model = model or settings.model
         self._client: OpenAI | None = None
 
     def _get_client(self) -> OpenAI:

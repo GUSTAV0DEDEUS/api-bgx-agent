@@ -136,9 +136,3 @@ def get_ai_service() -> AIService:
     if _ai_service is None:
         _ai_service = AIService()
     return _ai_service
-
-
-# Aliases para compatibilidade
-GeminiService = AIService
-GeminiServiceError = AIServiceError
-get_gemini_service = get_ai_service

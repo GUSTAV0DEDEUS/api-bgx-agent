@@ -25,7 +25,7 @@ from app.services.agent_config_service import (
     build_response_style_instructions,
     build_tone_instructions,
 )
-from app.services.gemini_service import ChatMessage, GeminiService, GeminiServiceError, get_gemini_service
+from app.services.openai_service import ChatMessage, AIService, AIServiceError, get_ai_service
 from app.services.langgraph_service import get_langgraph_service, LangGraphService
 from app.services.lead_scoring_service import LeadData, get_lead_scoring_service
 from app.services.whatsapp_service import WhatsAppService, whatsapp_service
@@ -62,7 +62,7 @@ class MessageHandler:
         timeout: int | None = None,
         history_limit: int | None = None,
         whatsapp: WhatsAppService | None = None,
-        gemini: GeminiService | None = None,
+        gemini: AIService | None = None,
         langgraph: LangGraphService | None = None,
     ):
         self.timeout = timeout or settings.message_consolidation_timeout
@@ -82,9 +82,9 @@ class MessageHandler:
         self._lock = threading.Lock()
 
     @property
-    def gemini(self) -> GeminiService:
+    def gemini(self) -> AIService:
         if self._gemini is None:
-            self._gemini = get_gemini_service()
+            self._gemini = get_ai_service()
         return self._gemini
 
     @property
@@ -313,8 +313,8 @@ class MessageHandler:
                         response_text = self._parse_bgx_commands(
                             response_text, db, conversation_id, profile_id, wa_id
                         )
-                    except GeminiServiceError as e:
-                        logger.error(f"Erro ao chamar Gemini: {e}")
+                    except AIServiceError as e:
+                        logger.error(f"Erro ao chamar OpenAI: {e}")
                         response_text = "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente."
 
                 delay = self._calculate_humanized_delay()

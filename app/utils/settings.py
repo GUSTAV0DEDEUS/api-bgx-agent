@@ -26,10 +26,9 @@ class Settings:
     meta_whatsapp_verify_token: str | None = os.getenv("META_WHATSAPP_VERIFY_TOKEN")
 
     # AI Services
-    gemini_api_key: str | None = os.getenv("GEMINI_API_KEY")
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_base_url: str | None = os.getenv("OPENAI_BASE_URL")
-    model: str = os.getenv("MODEL", "gemini-2.5-flash-lite")
+    model: str = os.getenv("MODEL", "gpt-4o-mini")
 
     # Message Handler Config
     message_history_limit: int = int(os.getenv("MESSAGE_HISTORY_LIMIT", "20"))

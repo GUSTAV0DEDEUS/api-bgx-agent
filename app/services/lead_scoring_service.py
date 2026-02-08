@@ -47,7 +47,7 @@ class LeadScoringService:
         model: str | None = None,
         max_retries: int = 3,
     ):
-        self.api_key = api_key or settings.openai_api_key or settings.gemini_api_key
+        self.api_key = api_key or settings.openai_api_key
         self.base_url = base_url or settings.openai_base_url
         self.model = model or settings.model
         self.max_retries = max_retries

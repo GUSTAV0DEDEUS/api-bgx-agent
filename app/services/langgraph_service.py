@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict, Literal, Annotated, Any, cast
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
 from langgraph.graph import StateGraph, END
 
@@ -120,21 +120,23 @@ NEGOTIATION_PROMPT_TEMPLATE = _load_prompt("system_prompt_negotiation.md")
 # ============================================
 
 class LangGraphService:
-    def __init__(self, model: str | None = None, api_key: str | None = None):
+    def __init__(self, model: str | None = None, api_key: str | None = None, base_url: str | None = None):
         self.model_name = model or settings.model
-        self.api_key = api_key or settings.gemini_api_key
-        self._llm: ChatGoogleGenerativeAI | None = None
+        self.api_key = api_key or settings.openai_api_key
+        self.base_url = base_url or settings.openai_base_url
+        self._llm: ChatOpenAI | None = None
         self._graph: StateGraph | None = None
         self._compiled_graph = None
 
     @property
-    def llm(self) -> ChatGoogleGenerativeAI:
+    def llm(self) -> ChatOpenAI:
         if self._llm is None:
             if not self.api_key:
-                raise ValueError("GEMINI_API_KEY não configurada")
-            self._llm = ChatGoogleGenerativeAI(
+                raise ValueError("OPENAI_API_KEY não configurada")
+            self._llm = ChatOpenAI(
                 model=self.model_name,
-                google_api_key=self.api_key,
+                api_key=self.api_key,
+                base_url=self.base_url,
                 temperature=0.7,
             )
         return self._llm

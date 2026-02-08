@@ -71,10 +71,12 @@ def get_all_paginated(
         step_mapping = {
             "step_novo_lead": Lead.step_novo_lead,
             "step_primeiro_contato": Lead.step_primeiro_contato,
+            "step_negociacao": Lead.step_negociacao,
             "step_orcamento_realizado": Lead.step_orcamento_realizado,
             "step_orcamento_aceito": Lead.step_orcamento_aceito,
             "step_orcamento_recusado": Lead.step_orcamento_recusado,
             "step_venda_convertida": Lead.step_venda_convertida,
+            "step_venda_perdida": Lead.step_venda_perdida,
         }
         if step in step_mapping:
             query = query.filter(step_mapping[step] == True)
@@ -100,7 +102,7 @@ def create_lead(
     nome_empresa: str | None = None,
     cargo: str | None = None,
     tags: list[str] | None = None,
-    score: int = 50,
+    score: int | None = None,
     notes: str | None = None,
 ) -> Lead:
     """Cria um novo lead."""
@@ -114,8 +116,9 @@ def create_lead(
         tags=tags or [],
         score=score,
         notes=notes,
-        status=LeadStatus.NOVO,
+        status=LeadStatus.MORNO,
         step_novo_lead=True,
+        step_primeiro_contato=True,
     )
     db.add(lead)
     db.commit()
@@ -136,10 +139,12 @@ def update_lead(
     status: str | None = None,
     step_novo_lead: bool | None = None,
     step_primeiro_contato: bool | None = None,
+    step_negociacao: bool | None = None,
     step_orcamento_realizado: bool | None = None,
     step_orcamento_aceito: bool | None = None,
     step_orcamento_recusado: bool | None = None,
     step_venda_convertida: bool | None = None,
+    step_venda_perdida: bool | None = None,
 ) -> Lead | None:
     """Atualiza um lead existente."""
     lead = get_by_id(db, lead_id)
@@ -166,6 +171,8 @@ def update_lead(
         lead.step_novo_lead = step_novo_lead
     if step_primeiro_contato is not None:
         lead.step_primeiro_contato = step_primeiro_contato
+    if step_negociacao is not None:
+        lead.step_negociacao = step_negociacao
     if step_orcamento_realizado is not None:
         lead.step_orcamento_realizado = step_orcamento_realizado
     if step_orcamento_aceito is not None:
@@ -174,6 +181,8 @@ def update_lead(
         lead.step_orcamento_recusado = step_orcamento_recusado
     if step_venda_convertida is not None:
         lead.step_venda_convertida = step_venda_convertida
+    if step_venda_perdida is not None:
+        lead.step_venda_perdida = step_venda_perdida
     
     db.commit()
     db.refresh(lead)
@@ -205,19 +214,18 @@ def get_metrics(db: Session) -> dict:
     by_step = {
         "novo_lead": base_query.filter(Lead.step_novo_lead == True).count(),
         "primeiro_contato": base_query.filter(Lead.step_primeiro_contato == True).count(),
+        "negociacao": base_query.filter(Lead.step_negociacao == True).count(),
         "orcamento_realizado": base_query.filter(Lead.step_orcamento_realizado == True).count(),
         "orcamento_aceito": base_query.filter(Lead.step_orcamento_aceito == True).count(),
         "orcamento_recusado": base_query.filter(Lead.step_orcamento_recusado == True).count(),
         "venda_convertida": base_query.filter(Lead.step_venda_convertida == True).count(),
+        "venda_perdida": base_query.filter(Lead.step_venda_perdida == True).count(),
     }
     
     by_status = {
-        "novo": base_query.filter(Lead.status == LeadStatus.NOVO).count(),
-        "em_contato": base_query.filter(Lead.status == LeadStatus.EM_CONTATO).count(),
-        "em_negociacao": base_query.filter(Lead.status == LeadStatus.EM_NEGOCIACAO).count(),
-        "proposta_enviada": base_query.filter(Lead.status == LeadStatus.PROPOSTA_ENVIADA).count(),
-        "fechado": base_query.filter(Lead.status == LeadStatus.FECHADO).count(),
-        "perdido": base_query.filter(Lead.status == LeadStatus.PERDIDO).count(),
+        "quente": base_query.filter(Lead.status == LeadStatus.QUENTE).count(),
+        "morno": base_query.filter(Lead.status == LeadStatus.MORNO).count(),
+        "frio": base_query.filter(Lead.status == LeadStatus.FRIO).count(),
     }
     
     # Taxa de conversão (vendas convertidas / total)

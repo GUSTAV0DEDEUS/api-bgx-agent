@@ -13,6 +13,7 @@ from app.schemas.lead_schemas import (
     LeadsListResponse,
     LeadUpdate,
 )
+from app.services.websocket_manager import ws_manager
 from app.utils.db import get_db
 
 
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/leads", tags=["Leads"])
 def list_leads(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=20, ge=1, le=100),
-    status: str | None = Query(default=None, description="Filtrar por status (novo, contatado, convertido, perdido)"),
+    status: str | None = Query(default=None, description="Filtrar por temperatura (quente, morno, frio)"),
     step: str | None = Query(default=None, description="Filtrar por step do pipeline"),
     db: Session = Depends(get_db),
 ):
@@ -31,7 +32,7 @@ def list_leads(
     Lista todos os leads com paginação e filtros.
     
     Filtros opcionais:
-    - status: Filtra por status do lead (novo, contatado, convertido, perdido)
+    - status: Filtra por temperatura do lead (quente, morno, frio)
     - step: Filtra por step do pipeline (step_novo_lead, step_primeiro_contato, etc.)
     
     Leads com soft delete não são retornados.
@@ -53,10 +54,12 @@ def list_leads(
             status=lead.status,
             step_novo_lead=lead.step_novo_lead,
             step_primeiro_contato=lead.step_primeiro_contato,
+            step_negociacao=lead.step_negociacao,
             step_orcamento_realizado=lead.step_orcamento_realizado,
             step_orcamento_aceito=lead.step_orcamento_aceito,
             step_orcamento_recusado=lead.step_orcamento_recusado,
             step_venda_convertida=lead.step_venda_convertida,
+            step_venda_perdida=lead.step_venda_perdida,
             created_at=lead.created_at,
             updated_at=lead.updated_at,
         )
@@ -121,17 +124,19 @@ def get_lead(
         status=lead.status,
         step_novo_lead=lead.step_novo_lead,
         step_primeiro_contato=lead.step_primeiro_contato,
+        step_negociacao=lead.step_negociacao,
         step_orcamento_realizado=lead.step_orcamento_realizado,
         step_orcamento_aceito=lead.step_orcamento_aceito,
         step_orcamento_recusado=lead.step_orcamento_recusado,
         step_venda_convertida=lead.step_venda_convertida,
+        step_venda_perdida=lead.step_venda_perdida,
         created_at=lead.created_at,
         updated_at=lead.updated_at,
     )
 
 
 @router.patch("/{lead_id}", response_model=LeadResponse)
-def update_lead(
+async def update_lead(
     lead_id: uuid.UUID,
     request: LeadUpdate,
     db: Session = Depends(get_db),
@@ -142,9 +147,10 @@ def update_lead(
     Campos atualizáveis:
     - Dados comerciais: nome_cliente, nome_empresa, cargo, telefone
     - Qualificação: tags, score, notes
-    - Status: status (novo, contatado, convertido, perdido)
-    - Pipeline: step_novo_lead, step_primeiro_contato, step_orcamento_realizado,
-                step_orcamento_recusado, step_venda_convertida
+    - Temperatura: status (quente, morno, frio)
+    - Pipeline: step_novo_lead, step_primeiro_contato, step_negociacao,
+                step_orcamento_realizado, step_orcamento_recusado,
+                step_venda_convertida, step_venda_perdida
     
     Apenas campos enviados são atualizados (PATCH parcial).
     """
@@ -157,6 +163,8 @@ def update_lead(
     lead = lead_dao.update_lead(db, lead_id, **update_data)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    await ws_manager.broadcast("lead_updated", {"lead_id": str(lead_id)})
     
     return LeadResponse(
         id=lead.id,
@@ -172,17 +180,19 @@ def update_lead(
         status=lead.status,
         step_novo_lead=lead.step_novo_lead,
         step_primeiro_contato=lead.step_primeiro_contato,
+        step_negociacao=lead.step_negociacao,
         step_orcamento_realizado=lead.step_orcamento_realizado,
         step_orcamento_aceito=lead.step_orcamento_aceito,
         step_orcamento_recusado=lead.step_orcamento_recusado,
         step_venda_convertida=lead.step_venda_convertida,
+        step_venda_perdida=lead.step_venda_perdida,
         created_at=lead.created_at,
         updated_at=lead.updated_at,
     )
 
 
 @router.delete("/{lead_id}")
-def delete_lead(
+async def delete_lead(
     lead_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
@@ -195,5 +205,7 @@ def delete_lead(
     success = lead_dao.soft_delete(db, lead_id)
     if not success:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
+    
+    await ws_manager.broadcast("lead_deleted", {"lead_id": str(lead_id)})
     
     return {"status": "ok", "message": "Lead removido"}

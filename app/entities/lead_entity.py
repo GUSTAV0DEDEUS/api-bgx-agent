@@ -12,13 +12,10 @@ from app.utils.db import Base
 
 
 class LeadStatus:
-    """Status possíveis para um lead no pipeline."""
-    NOVO = "novo"                      # Lead recém criado
-    EM_CONTATO = "em_contato"          # Em processo de qualificação
-    EM_NEGOCIACAO = "em_negociacao"    # Cliente pediu reunião/orçamento, humano assume
-    PROPOSTA_ENVIADA = "proposta_enviada"  # Orçamento/proposta enviado
-    FECHADO = "fechado"                # Venda realizada
-    PERDIDO = "perdido"                # Cliente desistiu/recusou
+    """Temperatura do lead (definida pela IA na fase de negociação)."""
+    QUENTE = "quente"    # Score >= 70 — alta probabilidade de conversão
+    MORNO = "morno"      # Score 40-69 — interesse moderado (default)
+    FRIO = "frio"        # Score < 40 — baixo interesse / sinais negativos
 
 
 class Lead(Base):
@@ -42,19 +39,21 @@ class Lead(Base):
 
     # Qualificação
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    score: Mapped[int | None] = mapped_column(Integer, nullable=True, default=50)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Status geral
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default=LeadStatus.NOVO)
+    # Temperatura do lead (quente/morno/frio) — definida pela IA na negociação
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=LeadStatus.MORNO)
 
     # Pipeline de vendas (checklist de steps)
     step_novo_lead: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     step_primeiro_contato: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    step_negociacao: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_orcamento_realizado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_orcamento_aceito: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_orcamento_recusado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_venda_convertida: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    step_venda_perdida: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Soft delete
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

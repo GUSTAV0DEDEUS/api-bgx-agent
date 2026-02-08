@@ -20,7 +20,7 @@ class LeadCreate(LeadBase):
     """Request para criar lead manualmente."""
     conversation_id: uuid.UUID
     profile_id: uuid.UUID
-    score: int = Field(default=50, ge=0, le=100)
+    score: int | None = Field(default=None, ge=0, le=100)
 
 
 class LeadUpdate(BaseModel):
@@ -32,25 +32,29 @@ class LeadUpdate(BaseModel):
     tags: list[str] | None = None
     score: int | None = Field(default=None, ge=0, le=100)
     notes: str | None = None
-    status: str | None = Field(default=None, pattern="^(novo|em_contato|em_negociacao|proposta_enviada|fechado|perdido)$")
+    status: str | None = Field(default=None, pattern="^(quente|morno|frio)$")
     
     # Steps do pipeline (checklist)
     step_novo_lead: bool | None = None
     step_primeiro_contato: bool | None = None
+    step_negociacao: bool | None = None
     step_orcamento_realizado: bool | None = None
     step_orcamento_aceito: bool | None = None
     step_orcamento_recusado: bool | None = None
     step_venda_convertida: bool | None = None
+    step_venda_perdida: bool | None = None
 
 
 class LeadSteps(BaseModel):
     """Steps do pipeline de vendas."""
     novo_lead: bool
     primeiro_contato: bool
+    negociacao: bool
     orcamento_realizado: bool
     orcamento_aceito: bool
     orcamento_recusado: bool
     venda_convertida: bool
+    venda_perdida: bool
 
 
 class LeadResponse(BaseModel):
@@ -70,10 +74,12 @@ class LeadResponse(BaseModel):
     # Steps do pipeline
     step_novo_lead: bool
     step_primeiro_contato: bool
+    step_negociacao: bool
     step_orcamento_realizado: bool
     step_orcamento_aceito: bool
     step_orcamento_recusado: bool
     step_venda_convertida: bool
+    step_venda_perdida: bool
     
     created_at: datetime
     updated_at: datetime

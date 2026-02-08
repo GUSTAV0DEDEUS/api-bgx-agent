@@ -29,6 +29,7 @@ from app.services.gemini_service import ChatMessage, GeminiService, GeminiServic
 from app.services.langgraph_service import get_langgraph_service, LangGraphService
 from app.services.lead_scoring_service import LeadData, get_lead_scoring_service
 from app.services.whatsapp_service import WhatsAppService, whatsapp_service
+from app.services.websocket_manager import ws_manager
 from app.utils.message_splitter import split_response
 from app.utils.settings import settings
 
@@ -181,24 +182,12 @@ class MessageHandler:
             cargo = lead_data.get("cargo")
             tags = lead_data.get("tags", [])
             notes = lead_data.get("notes")
-            scoring_service = get_lead_scoring_service()
-            lead_data_obj = LeadData(
-                nome_cliente=nome_cliente, nome_empresa=nome_empresa, cargo=cargo,
-                telefone=profile_phone, tags=tags, notes=notes,
-            )
-            score_result = scoring_service.calculate_score(db, conversation_id, lead_data_obj)
-            score = score_result.get("score", 50)
-            scoring_justificativa = score_result.get("justificativa", "")
-            if scoring_justificativa and notes:
-                notes = f"{notes}\n\n[Scoring IA]: {scoring_justificativa}"
-            elif scoring_justificativa:
-                notes = f"[Scoring IA]: {scoring_justificativa}"
             lead = lead_dao.create_lead(
                 db, conversation_id=conversation_id, profile_id=profile_id,
                 telefone=profile_phone, nome_cliente=nome_cliente,
-                nome_empresa=nome_empresa, cargo=cargo, tags=tags, score=score, notes=notes,
+                nome_empresa=nome_empresa, cargo=cargo, tags=tags, score=None, notes=notes,
             )
-            logger.info(f"Lead criado: {lead.id} com score {score} para conversa {conversation_id}")
+            logger.info(f"Lead criado: {lead.id} (score pendente) para conversa {conversation_id}")
 
             # Se o contato não tem nome e o lead tem, copia para o contato
             if nome_cliente:
@@ -273,8 +262,8 @@ class MessageHandler:
                     }
                     lead_id = str(existing_lead.id)
 
-                    # Mapeia status do lead para pipeline_stage
-                    if existing_lead.status == LeadStatus.EM_NEGOCIACAO:
+                    # Mapeia step do lead para pipeline_stage
+                    if existing_lead.step_negociacao:
                         pipeline_stage = "negotiation"
                     else:
                         pipeline_stage = "first_contact"
@@ -342,6 +331,28 @@ class MessageHandler:
                     role="agent", content=response_text or "",
                 )
 
+                # Notifica clientes WebSocket sobre nova mensagem
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(ws_manager.broadcast("new_message", {
+                            "conversation_id": str(conversation_id),
+                            "profile_id": str(profile_id),
+                        }))
+                    else:
+                        loop.run_until_complete(ws_manager.broadcast("new_message", {
+                            "conversation_id": str(conversation_id),
+                            "profile_id": str(profile_id),
+                        }))
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    loop.run_until_complete(ws_manager.broadcast("new_message", {
+                        "conversation_id": str(conversation_id),
+                        "profile_id": str(profile_id),
+                    }))
+                    loop.close()
+
                 logger.info(f"Mensagem processada para {wa_id}")
             finally:
                 db.close()
@@ -381,40 +392,61 @@ class MessageHandler:
                     elif not nome_cliente and profile and profile.first_name:
                         nome_cliente = profile.first_name
 
-                    scoring_service = get_lead_scoring_service()
-                    lead_data_obj = LeadData(
-                        nome_cliente=nome_cliente,
-                        nome_empresa=lead_data.get("nome_empresa"),
-                        cargo=lead_data.get("cargo"),
-                        telefone=profile_phone,
-                        tags=lead_data.get("tags", []),
-                        notes=lead_data.get("notes"),
-                    )
-                    score_result = scoring_service.calculate_score(db, conversation_id, lead_data_obj)
-                    score = score_result.get("score", 50)
                     lead = lead_dao.create_lead(
                         db, conversation_id=conversation_id, profile_id=profile_id,
                         telefone=profile_phone, nome_cliente=nome_cliente,
                         nome_empresa=lead_data.get("nome_empresa"),
                         cargo=lead_data.get("cargo"),
-                        tags=lead_data.get("tags", []), score=score,
-                        notes=score_result.get("justificativa"),
+                        tags=lead_data.get("tags", []), score=None,
+                        notes=lead_data.get("notes"),
                     )
-                    logger.info(f"Lead criado via LangGraph: {lead.id}")
+                    logger.info(f"Lead criado via LangGraph: {lead.id} (score pendente)")
                     for tag in lead_data.get("tags", []):
                         self._add_tag_to_conversation_and_profile(
                             db, conversation_id, profile_id, tag
                         )
 
+                    # Notifica clientes WebSocket sobre novo lead
+                    import asyncio
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.ensure_future(ws_manager.broadcast("lead_created", {
+                                "lead_id": str(lead.id),
+                                "conversation_id": str(conversation_id),
+                            }))
+                        else:
+                            loop.run_until_complete(ws_manager.broadcast("lead_created", {
+                                "lead_id": str(lead.id),
+                                "conversation_id": str(conversation_id),
+                            }))
+                    except RuntimeError:
+                        pass
+
             if result.get("should_human_takeover"):
                 conversation_dao.set_human_takeover(db, conversation_id)
                 logger.info(f"Human takeover ativado para conversa {conversation_id}")
+
+                # Notifica clientes WebSocket sobre human takeover
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(ws_manager.broadcast("human_takeover", {
+                            "conversation_id": str(conversation_id),
+                        }))
+                    else:
+                        loop.run_until_complete(ws_manager.broadcast("human_takeover", {
+                            "conversation_id": str(conversation_id),
+                        }))
+                except RuntimeError:
+                    pass
 
                 lead = lead_dao.get_by_conversation_id(db, conversation_id)
                 if lead:
                     pipeline_stage = result.get("pipeline_stage", "")
                     if pipeline_stage == "negotiation":
-                        # Roda scoring antes de mover para negociação
+                        # Roda scoring e calcula temperatura na transição para negociação
                         try:
                             scoring_service = get_lead_scoring_service()
                             lead_data_obj = LeadData(
@@ -426,28 +458,42 @@ class MessageHandler:
                                 notes=lead.notes,
                             )
                             score_result = scoring_service.calculate_score(db, conversation_id, lead_data_obj)
-                            new_score = score_result.get("score", lead.score or 50)
+                            new_score = score_result.get("score", 50)
                             justificativa = score_result.get("justificativa", "")
                             notes = lead.notes or ""
                             if justificativa:
                                 notes = f"{notes}\n\n[Scoring negociação]: {justificativa}".strip()
+
+                            # Define temperatura baseada no score
+                            if new_score >= 70:
+                                temperatura = LeadStatus.QUENTE
+                            elif new_score >= 40:
+                                temperatura = LeadStatus.MORNO
+                            else:
+                                temperatura = LeadStatus.FRIO
+
                             lead_dao.update_lead(
                                 db, lead.id,
-                                status=LeadStatus.EM_NEGOCIACAO,
+                                status=temperatura,
                                 score=new_score,
                                 notes=notes,
+                                step_negociacao=True,
                             )
-                            logger.info(f"Lead {lead.id} movido para em_negociacao com score {new_score}")
+                            logger.info(f"Lead {lead.id} em negociação: score={new_score}, temperatura={temperatura}")
                         except Exception as e:
                             logger.error(f"Erro ao rodar scoring na negociação: {e}")
-                            lead_dao.update_lead(db, lead.id, status=LeadStatus.EM_NEGOCIACAO)
-                            logger.info(f"Lead {lead.id} movido para em_negociacao (sem scoring)")
+                            lead_dao.update_lead(db, lead.id, step_negociacao=True)
+                            logger.info(f"Lead {lead.id} step_negociacao=True (sem scoring)")
                     elif result.get("current_score", 50) < 30:
-                        # Lead frio
+                        # Lead frio — seta temperatura e adiciona tag
+                        lead_dao.update_lead(
+                            db, lead.id,
+                            status=LeadStatus.FRIO,
+                            tags=list(set(lead.tags + ["frio"])),
+                        )
                         self._add_tag_to_conversation_and_profile(
                             db, conversation_id, profile_id, "frio"
                         )
-                        lead_dao.update_lead(db, lead.id, tags=list(set(lead.tags + ["frio"])))
         except Exception as e:
             logger.error(f"Erro ao processar acoes do LangGraph: {e}")
 

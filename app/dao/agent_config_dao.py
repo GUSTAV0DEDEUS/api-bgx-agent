@@ -10,12 +10,7 @@ from app.entities.agent_config_entity import (
     ToneEnum,
 )
 
-
 def get_config(db: Session) -> AgentConfig:
-    """
-    Retorna a configuracao singleton do agente.
-    Se nao existir, cria com defaults.
-    """
     config = db.query(AgentConfig).first()
     if config:
         return config
@@ -31,7 +26,6 @@ def get_config(db: Session) -> AgentConfig:
     db.refresh(config)
     return config
 
-
 def update_config(
     db: Session,
     tone: str | None = None,
@@ -40,7 +34,6 @@ def update_config(
     greeting_style: str | None = None,
     max_message_length: int | None = None,
 ) -> AgentConfig:
-    """Atualiza a configuracao do agente."""
     config = get_config(db)
     if tone is not None:
         config.tone = tone

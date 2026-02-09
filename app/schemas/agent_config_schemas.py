@@ -12,9 +12,7 @@ from app.entities.agent_config_entity import (
     ToneEnum,
 )
 
-
 class AgentConfigResponse(BaseModel):
-    """Response da configuracao do agente."""
     id: uuid.UUID
     tone: ToneEnum
     use_emojis: EmojiUsageEnum
@@ -27,9 +25,7 @@ class AgentConfigResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class AgentConfigUpdate(BaseModel):
-    """Request para atualizar a configuracao do agente."""
     tone: ToneEnum | None = None
     use_emojis: EmojiUsageEnum | None = None
     response_style: ResponseStyleEnum | None = None

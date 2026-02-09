@@ -1,17 +1,3 @@
-"""
-LangGraph Service - Orquestração de Agentes de Vendas
-
-Este serviço implementa o fluxo de agentes usando LangGraph:
-1. Onboarding Agent - Extrai nome/empresa/cargo naturalmente e cria lead
-2. First Contact Agent - Discovery sem perguntas técnicas, entende o cliente
-3. Negotiation Agent - Detecta interesse em proposta/reunião e ativa human takeover
-
-Fluxo:
-- Nova conversa sem lead → onboarding
-- Conversa com lead existente → first_contact
-- Cliente pergunta sobre reunião/orçamento → negotiation → human takeover
-- Score < 30% após 2+ mensagens → human takeover (lead frio)
-"""
 from __future__ import annotations
 
 import json
@@ -27,16 +13,9 @@ from langgraph.graph import StateGraph, END
 
 from app.utils.settings import settings
 
-
 logger = logging.getLogger(__name__)
 
-
-# ============================================
-# TIPOS E ESTADOS
-# ============================================
-
 class LeadInfo(TypedDict, total=False):
-    """Informações extraídas do lead."""
     first_name: str | None
     last_name: str | None
     nome_empresa: str | None
@@ -44,9 +23,7 @@ class LeadInfo(TypedDict, total=False):
     tags: list[str]
     notes: str | None
 
-
 class ConversationState(TypedDict):
-    """Estado da conversa no grafo."""
     messages: list[BaseMessage]
     profile_id: str
     conversation_id: str
@@ -66,29 +43,16 @@ class ConversationState(TypedDict):
     greeting_instructions: str
     response_style_instructions: str
 
-
 PipelineStage = Literal["onboarding", "first_contact", "negotiation"]
 
-
-# ============================================
-# PROMPTS
-# ============================================
-
 def _load_prompt(filename: str) -> str:
-    """Carrega prompt da pasta instructions."""
     path = Path(__file__).parent.parent / "instructions" / filename
     if path.exists():
         return path.read_text(encoding="utf-8")
     logger.warning(f"Prompt file not found: {path}")
     return ""
 
-
 def _safe_format(template: str, **kwargs) -> str:
-    """Formata template de forma segura, substituindo apenas placeholders conhecidos.
-
-    Usa substituição manual em vez de str.format() para evitar KeyError
-    quando o template contém chaves literais (ex: JSON nos exemplos do prompt).
-    """
     result = template
     for key, value in kwargs.items():
         placeholder = "{" + key + "}"
@@ -99,7 +63,6 @@ def _safe_format(template: str, **kwargs) -> str:
         result = result.replace(placeholder, replacement)
     return result
 
-
 def _get_lead_field(lead: Any, field_name: str, default: str = "Não informado") -> str:
     if not lead:
         return default
@@ -108,16 +71,9 @@ def _get_lead_field(lead: Any, field_name: str, default: str = "Não informado")
         return default
     return str(value)
 
-
-# Carrega prompts dos arquivos .md
 ONBOARDING_PROMPT_TEMPLATE = _load_prompt("system_prompt_onboarding.md")
 FIRST_CONTACT_PROMPT_TEMPLATE = _load_prompt("system_prompt_first_contact.md")
 NEGOTIATION_PROMPT_TEMPLATE = _load_prompt("system_prompt_negotiation.md")
-
-
-# ============================================
-# LANGGRAPH SERVICE
-# ============================================
 
 class LangGraphService:
     def __init__(self, model: str | None = None, api_key: str | None = None, base_url: str | None = None):
@@ -150,12 +106,10 @@ class LangGraphService:
     def _build_graph(self):
         workflow = StateGraph(ConversationState)
 
-        # 3 nós: onboarding, first_contact, negotiation
         workflow.add_node("onboarding", self._onboarding_node)
         workflow.add_node("first_contact", self._first_contact_node)
         workflow.add_node("negotiation", self._negotiation_node)
 
-        # Entry point condicional
         workflow.set_conditional_entry_point(
             self._route_entry,
             {
@@ -165,7 +119,6 @@ class LangGraphService:
             }
         )
 
-        # Transições após onboarding
         workflow.add_conditional_edges(
             "onboarding",
             self._route_after_onboarding,
@@ -176,7 +129,6 @@ class LangGraphService:
             }
         )
 
-        # Transições após first_contact
         workflow.add_conditional_edges(
             "first_contact",
             self._route_after_first_contact,
@@ -187,17 +139,11 @@ class LangGraphService:
             }
         )
 
-        # Negotiation sempre termina (human takeover)
         workflow.add_edge("negotiation", END)
 
         return workflow.compile()
 
-    # ============================================
-    # ROTEAMENTO
-    # ============================================
-
     def _route_entry(self, state: ConversationState) -> str:
-        """Determina o nó de entrada baseado no estado."""
         if state.get("should_human_takeover"):
             return "negotiation"
         if not state.get("lead_id"):
@@ -208,7 +154,6 @@ class LangGraphService:
         return "first_contact"
 
     def _route_after_onboarding(self, state: ConversationState) -> str:
-        """Roteamento após onboarding."""
         if state.get("should_human_takeover"):
             return "human"
         if state.get("should_create_lead"):
@@ -216,31 +161,20 @@ class LangGraphService:
         return "onboarding"
 
     def _route_after_first_contact(self, state: ConversationState) -> str:
-        """Roteamento após first_contact."""
         if state.get("should_human_takeover"):
             return "human"
         if state.get("pipeline_stage") == "negotiation":
             return "negotiation"
         return "first_contact"
 
-    # ============================================
-    # HELPERS
-    # ============================================
-
     def _format_context(self, messages: list[BaseMessage]) -> str:
-        """Formata histórico de mensagens para contexto."""
         lines = []
         for msg in messages[-10:]:
             role = "Cliente" if isinstance(msg, HumanMessage) else "Agente"
             lines.append(f"{role}: {msg.content}")
         return "\n".join(lines)
 
-    # ============================================
-    # NÓS DO GRAFO
-    # ============================================
-
     def _onboarding_node(self, state: ConversationState) -> ConversationState:
-        """Nó de onboarding: extrai nome, empresa, cargo naturalmente."""
         logger.info("Entrando no onboarding_node")
         try:
             context = self._format_context(state["messages"])
@@ -260,7 +194,6 @@ class LangGraphService:
             new_state = dict(state)
             new_state["response"] = response_text
 
-            # Extrai dados do lead
             if "[LEAD_DATA]" in response_text and "[/LEAD_DATA]" in response_text:
                 try:
                     start = response_text.index("[LEAD_DATA]") + len("[LEAD_DATA]")
@@ -272,7 +205,6 @@ class LangGraphService:
                     new_state["should_create_lead"] = True
                     new_state["first_name"] = lead_data.get("first_name", state.get("first_name"))
 
-                    # Remove marcador da resposta
                     full_marker = f"[LEAD_DATA]{lead_json}[/LEAD_DATA]"
                     response_text = response_text.replace(full_marker, "").strip()
                     new_state["response"] = response_text
@@ -288,7 +220,6 @@ class LangGraphService:
             raise
 
     def _first_contact_node(self, state: ConversationState) -> ConversationState:
-        """Nó de primeiro contato: discovery sem perguntas técnicas."""
         logger.info("Entrando no first_contact_node")
         try:
             lead = state.get("lead")
@@ -313,11 +244,8 @@ class LangGraphService:
             new_state = dict(state)
             new_state["response"] = response_text
 
-            # Extrai análise do lead (memória de cálculo)
             new_state = self._extract_lead_analysis(new_state, response_text)
 
-            # Detecta intenção de negociação → roteia para negotiation_node
-            # NÃO seta should_human_takeover aqui; o negotiation_node cuida disso
             if "[NEGOTIATION_DETECTED]true[/NEGOTIATION_DETECTED]" in response_text:
                 new_state["pipeline_stage"] = "negotiation"
                 response_text = response_text.replace(
@@ -335,7 +263,6 @@ class LangGraphService:
             raise
 
     def _negotiation_node(self, state: ConversationState) -> ConversationState:
-        """Nó de negociação: mensagem de transição para humano."""
         logger.info("Entrando no negotiation_node")
         try:
             lead = state.get("lead")
@@ -367,12 +294,7 @@ class LangGraphService:
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
 
-    # ============================================
-    # CHECAGENS E EXTRAÇÃO
-    # ============================================
-
     def _check_negative_signal(self, state: dict, response_text: str) -> dict:
-        """Verifica sinais negativos na resposta e ajusta score."""
         if "[NEGATIVE_SIGNAL]true[/NEGATIVE_SIGNAL]" in response_text:
             state["negative_score_count"] = state.get("negative_score_count", 0) + 1
             state["current_score"] = max(0, state.get("current_score", 50) - 20)
@@ -391,7 +313,6 @@ class LangGraphService:
         return state
 
     def _extract_tags(self, state: dict, response_text: str) -> dict:
-        """Extrai tags da resposta."""
         import re
         tag_pattern = r'\[ADD_TAG\]\s*(\{.*?\})\s*\[/ADD_TAG\]'
         matches = re.findall(tag_pattern, response_text, re.DOTALL)
@@ -414,7 +335,6 @@ class LangGraphService:
         return state
 
     def _extract_lead_analysis(self, state: dict, response_text: str) -> dict:
-        """Extrai análise do lead (memória de cálculo) e remove do texto."""
         import re
         pattern = r'\[LEAD_ANALYSIS\]\s*(\{.*?\})\s*\[/LEAD_ANALYSIS\]'
         matches = re.findall(pattern, response_text, re.DOTALL)
@@ -429,10 +349,6 @@ class LangGraphService:
 
         state["response"] = re.sub(pattern, "", state.get("response", "")).strip()
         return state
-
-    # ============================================
-    # ENTRY POINT PÚBLICO
-    # ============================================
 
     def process_message(
         self,
@@ -449,7 +365,6 @@ class LangGraphService:
         greeting_instructions: str = "",
         response_style_instructions: str = "",
     ) -> ConversationState:
-        """Processa uma mensagem através do grafo LangGraph."""
         langchain_messages = []
         for msg in messages:
             if msg["role"] == "user":
@@ -494,9 +409,7 @@ class LangGraphService:
             initial_state["response"] = "Desculpe, ocorreu um erro. Pode repetir?"
             return cast(ConversationState, initial_state)
 
-
 _langgraph_service: LangGraphService | None = None
-
 
 def get_langgraph_service() -> LangGraphService:
     global _langgraph_service

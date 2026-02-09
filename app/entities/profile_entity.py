@@ -9,7 +9,6 @@ from sqlalchemy.sql import func
 
 from app.utils.db import Base
 
-
 class Profile(Base):
     __tablename__ = "profiles"
 
@@ -29,7 +28,6 @@ class Profile(Base):
 
     @property
     def display_name(self) -> str | None:
-        """Nome completo para exibição (compatibilidade)."""
         if self.first_name and self.last_name:
             return f"{self.first_name} {self.last_name}"
         return self.first_name

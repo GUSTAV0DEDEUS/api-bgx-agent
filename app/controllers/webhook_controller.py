@@ -11,32 +11,21 @@ from app.services.webhook_service import extract_message_data, message_handler
 from app.utils.db import get_db, SessionLocal
 from app.utils.settings import settings
 
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
 @router.get("/")
 def health_check():
-    """Health check endpoint."""
     return {"status": "ok"}
 
-
 def get_db_factory():
-    """Factory function para criar novas sessões do banco."""
     def factory() -> Session:
         return SessionLocal()
     return factory
 
-
 @router.get("/webhook", response_class=PlainTextResponse)
 def verify_webhook(request: Request):
-    """
-    Endpoint de verificação do webhook do Meta/WhatsApp.
-    
-    Requer META_WHATSAPP_VERIFY_TOKEN configurado.
-    """
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
@@ -48,19 +37,12 @@ def verify_webhook(request: Request):
     logger.warning("Falha na verificação do webhook")
     raise HTTPException(status_code=403, detail="Falha na verificação do webhook")
 
-
 @router.post("/webhook")
 def receive_webhook(
     payload: WebhookPayload,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """
-    Endpoint para receber mensagens do WhatsApp.
-    
-    Processa mensagens de texto de forma assíncrona com consolidação por timeout.
-    Retorna 200 imediatamente para o Meta não reenviar.
-    """
     wa_id, display_name, text_body, message_id, message_type = extract_message_data(payload)
 
     if not wa_id or not message_id:
@@ -72,7 +54,6 @@ def receive_webhook(
     db_factory = get_db_factory()
 
     if message_type == "text" and text_body:
-        # Processa mensagem de texto
         message_handler.handle_text_message(
             wa_id=wa_id,
             text=text_body,
@@ -81,14 +62,12 @@ def receive_webhook(
             db_factory=db_factory,
         )
     elif message_type == "audio":
-        # Áudio não suportado
         background_tasks.add_task(
             message_handler.handle_audio_message,
             wa_id,
             message_id,
         )
     else:
-        # Outros tipos não suportados
         background_tasks.add_task(
             message_handler.handle_unsupported_message,
             wa_id,

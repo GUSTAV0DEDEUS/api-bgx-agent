@@ -9,7 +9,6 @@ from sqlalchemy.sql import func
 
 from app.utils.db import Base
 
-
 class Message(Base):
     __tablename__ = "messages"
 
@@ -18,7 +17,7 @@ class Message(Base):
         UUID(as_uuid=True), ForeignKey("conversations.id"), index=True
     )
     profile_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"), index=True)
-    role: Mapped[str] = mapped_column(String(16), nullable=False)  # 'user' ou 'agent'
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
     message_type: Mapped[str] = mapped_column(String(32), default="text", nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)

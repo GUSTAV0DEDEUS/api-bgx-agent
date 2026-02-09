@@ -16,9 +16,7 @@ from app.schemas.lead_schemas import (
 from app.services.websocket_manager import ws_manager
 from app.utils.db import get_db
 
-
 router = APIRouter(prefix="/leads", tags=["Leads"])
-
 
 @router.get("/", response_model=LeadsListResponse)
 def list_leads(
@@ -28,15 +26,6 @@ def list_leads(
     step: str | None = Query(default=None, description="Filtrar por step do pipeline"),
     db: Session = Depends(get_db),
 ):
-    """
-    Lista todos os leads com paginação e filtros.
-    
-    Filtros opcionais:
-    - status: Filtra por temperatura do lead (quente, morno, frio)
-    - step: Filtra por step do pipeline (step_novo_lead, step_primeiro_contato, etc.)
-    
-    Leads com soft delete não são retornados.
-    """
     leads, total = lead_dao.get_all_paginated(db, page, per_page, status, step)
     
     items = [
@@ -74,20 +63,10 @@ def list_leads(
         pages=math.ceil(total / per_page) if total > 0 else 0,
     )
 
-
 @router.get("/metrics", response_model=LeadMetricsResponse)
 def get_lead_metrics(
     db: Session = Depends(get_db),
 ):
-    """
-    Retorna métricas agregadas dos leads.
-    
-    Inclui:
-    - Total de leads
-    - Contagem por step do pipeline
-    - Contagem por status
-    - Taxa de conversão
-    """
     metrics = lead_dao.get_metrics(db)
     
     return LeadMetricsResponse(
@@ -97,15 +76,11 @@ def get_lead_metrics(
         conversion_rate=metrics["conversion_rate"],
     )
 
-
 @router.get("/{lead_id}", response_model=LeadResponse)
 def get_lead(
     lead_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    """
-    Retorna detalhes de um lead específico.
-    """
     lead = lead_dao.get_by_id(db, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
@@ -134,27 +109,12 @@ def get_lead(
         updated_at=lead.updated_at,
     )
 
-
 @router.patch("/{lead_id}", response_model=LeadResponse)
 async def update_lead(
     lead_id: uuid.UUID,
     request: LeadUpdate,
     db: Session = Depends(get_db),
 ):
-    """
-    Atualiza um lead existente.
-    
-    Campos atualizáveis:
-    - Dados comerciais: nome_cliente, nome_empresa, cargo, telefone
-    - Qualificação: tags, score, notes
-    - Temperatura: status (quente, morno, frio)
-    - Pipeline: step_novo_lead, step_primeiro_contato, step_negociacao,
-                step_orcamento_realizado, step_orcamento_recusado,
-                step_venda_convertida, step_venda_perdida
-    
-    Apenas campos enviados são atualizados (PATCH parcial).
-    """
-    # Converte para dict excluindo None
     update_data = request.model_dump(exclude_none=True)
     
     if not update_data:
@@ -190,18 +150,11 @@ async def update_lead(
         updated_at=lead.updated_at,
     )
 
-
 @router.delete("/{lead_id}")
 async def delete_lead(
     lead_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    """
-    Remove um lead (soft delete).
-    
-    O lead não é excluído fisicamente, apenas marcado como deletado.
-    Isso permite auditoria e recuperação se necessário.
-    """
     success = lead_dao.soft_delete(db, lead_id)
     if not success:
         raise HTTPException(status_code=404, detail="Lead não encontrado")

@@ -7,14 +7,10 @@ from sqlalchemy.orm import Session
 from app.dao import agent_config_dao
 from app.entities.agent_config_entity import AgentConfig
 
-
 logger = logging.getLogger(__name__)
 
-
 def get_config(db: Session) -> AgentConfig:
-    """Retorna a configuracao atual do agente."""
     return agent_config_dao.get_config(db)
-
 
 def update_config(
     db: Session,
@@ -24,7 +20,6 @@ def update_config(
     greeting_style: str | None = None,
     max_message_length: int | None = None,
 ) -> AgentConfig:
-    """Atualiza a configuracao do agente."""
     config = agent_config_dao.update_config(
         db,
         tone=tone,
@@ -36,9 +31,7 @@ def update_config(
     logger.info(f"Configuracao do agente atualizada: tone={config.tone}, emojis={config.use_emojis}")
     return config
 
-
 def build_tone_instructions(config: AgentConfig) -> str:
-    """Gera instrucoes de tom de voz baseadas na configuracao."""
     tone_map = {
         "profissional": (
             "Use um tom profissional e confiante. "
@@ -63,9 +56,7 @@ def build_tone_instructions(config: AgentConfig) -> str:
     }
     return tone_map.get(config.tone, tone_map["profissional"])
 
-
 def build_emoji_instructions(config: AgentConfig) -> str:
-    """Gera instrucoes de uso de emoji baseadas na configuracao."""
     emoji_map = {
         "sempre": (
             "Use emojis frequentemente nas mensagens para tornar a conversa mais expressiva. "
@@ -82,9 +73,7 @@ def build_emoji_instructions(config: AgentConfig) -> str:
     }
     return emoji_map.get(config.use_emojis, emoji_map["moderado"])
 
-
 def build_greeting_instructions(config: AgentConfig) -> str:
-    """Gera instrucoes de saudacao baseadas na configuracao."""
     greeting_map = {
         "caloroso": "Cumprimente o cliente de forma calorosa e acolhedora. Use o primeiro nome quando disponivel.",
         "neutro": "Cumprimente de forma neutra e educada. Use saudacoes padrao como 'Ola' ou 'Bom dia'.",
@@ -92,9 +81,7 @@ def build_greeting_instructions(config: AgentConfig) -> str:
     }
     return greeting_map.get(config.greeting_style, greeting_map["caloroso"])
 
-
 def build_response_style_instructions(config: AgentConfig) -> str:
-    """Gera instrucoes de estilo de resposta baseadas na configuracao."""
     style_map = {
         "formal": (
             "Responda de forma formal e estruturada. "

@@ -33,9 +33,7 @@ from app.services.websocket_manager import ws_manager
 from app.utils.message_splitter import split_response
 from app.utils.settings import settings
 
-
 logger = logging.getLogger(__name__)
-
 
 AUDIO_NOT_SUPPORTED_MESSAGE = (
     "Desculpe, ainda nao suportamos mensagens de audio. "
@@ -47,14 +45,12 @@ BGX_COMMAND_PATTERN = re.compile(
     re.DOTALL
 )
 
-
 @dataclass
 class PendingMessage:
     texts: list[str] = field(default_factory=list)
     timestamp: float = 0.0
     last_sent: str = ""
     timer: threading.Timer | None = None
-
 
 class MessageHandler:
     def __init__(
@@ -115,11 +111,9 @@ class MessageHandler:
         return random.uniform(self.min_delay, self.max_delay)
 
     def _send_split_messages(self, wa_id: str, text: str, max_length: int = 300) -> None:
-        """Envia resposta dividida em chunks menores para simular naturalidade."""
         chunks = split_response(text, max_length=max_length)
         for i, chunk in enumerate(chunks):
             if i > 0:
-                # Delay entre chunks (1-3 segundos)
                 time.sleep(random.uniform(1.0, 3.0))
             self.whatsapp.send_text_message(wa_id, chunk)
 
@@ -189,7 +183,6 @@ class MessageHandler:
             )
             logger.info(f"Lead criado: {lead.id} (score pendente) para conversa {conversation_id}")
 
-            # Se o contato não tem nome e o lead tem, copia para o contato
             if nome_cliente:
                 profile = profile_dao.get_by_id(db, profile_id)
                 if profile and not profile.first_name:
@@ -201,7 +194,6 @@ class MessageHandler:
             logger.error(f"Erro ao criar lead para conversa {conversation_id}: {e}")
 
     def _get_agent_config_instructions(self, db: Session) -> tuple[str, str, str, str, int]:
-        """Carrega agent_config e gera instrucoes de tom, emoji, saudacao, estilo."""
         try:
             config = agent_config_dao.get_config(db)
             return (
@@ -244,12 +236,10 @@ class MessageHandler:
                     {"role": msg.role, "content": msg.content} for msg in history
                 ]
 
-                # Busca lead existente
                 existing_lead = lead_dao.get_by_conversation_id(db, conversation_id)
                 if not existing_lead:
                     existing_lead = lead_dao.get_by_profile_id(db, profile_id)
 
-                # Busca profile para obter first_name
                 profile = profile_dao.get_by_id(db, profile_id)
                 first_name = profile.first_name if profile else None
 
@@ -262,13 +252,11 @@ class MessageHandler:
                     }
                     lead_id = str(existing_lead.id)
 
-                    # Mapeia step do lead para pipeline_stage
                     if existing_lead.step_negociacao:
                         pipeline_stage = "negotiation"
                     else:
                         pipeline_stage = "first_contact"
 
-                    # Usa first_name do lead se disponivel
                     if existing_lead.nome_cliente:
                         first_name = existing_lead.nome_cliente
                 else:
@@ -278,7 +266,6 @@ class MessageHandler:
 
                 user_message_count = len([m for m in messages_for_graph if m["role"] == "user"])
 
-                # Carrega configuracoes do agente
                 (
                     tone_instructions,
                     emoji_instructions,
@@ -321,17 +308,14 @@ class MessageHandler:
                 logger.debug(f"Aplicando delay humanizado de {delay:.1f}s para {wa_id}")
                 time.sleep(delay)
 
-                # Envia resposta dividida em chunks para naturalidade
                 if response_text:
                     self._send_split_messages(wa_id, response_text, max_length=max_message_length)
 
-                # Persiste a mensagem completa como registro unico
                 create_message(
                     db, conversation_id=conversation_id, profile_id=profile_id,
                     role="agent", content=response_text or "",
                 )
 
-                # Notifica clientes WebSocket sobre nova mensagem
                 import asyncio
                 try:
                     loop = asyncio.get_event_loop()
@@ -372,11 +356,8 @@ class MessageHandler:
                     first_name_raw = lead_data.get("first_name")
                     last_name = lead_data.get("last_name")
 
-                    # Garante que first_name contenha apenas o primeiro nome
-                    # (em caso do agente extrair nome completo)
                     first_name = profile_dao.extract_first_name_only(first_name_raw) if first_name_raw else None
 
-                    # Se o contato não tem nome e o lead tem, copia para o contato
                     if profile and first_name and not profile.first_name:
                         profile_dao.update_name(
                             db, profile_id,
@@ -385,7 +366,6 @@ class MessageHandler:
                         )
                         logger.info(f"Nome do lead copiado para contato {profile_id}: {first_name} {last_name or ''}")
 
-                    # Monta nome_cliente para o lead (first_name + last_name)
                     nome_cliente = first_name
                     if first_name and last_name:
                         nome_cliente = f"{first_name} {last_name}"
@@ -406,7 +386,6 @@ class MessageHandler:
                             db, conversation_id, profile_id, tag
                         )
 
-                    # Notifica clientes WebSocket sobre novo lead
                     import asyncio
                     try:
                         loop = asyncio.get_event_loop()
@@ -427,7 +406,6 @@ class MessageHandler:
                 conversation_dao.set_human_takeover(db, conversation_id)
                 logger.info(f"Human takeover ativado para conversa {conversation_id}")
 
-                # Notifica clientes WebSocket sobre human takeover
                 import asyncio
                 try:
                     loop = asyncio.get_event_loop()
@@ -446,7 +424,6 @@ class MessageHandler:
                 if lead:
                     pipeline_stage = result.get("pipeline_stage", "")
                     if pipeline_stage == "negotiation":
-                        # Roda scoring e calcula temperatura na transição para negociação
                         try:
                             scoring_service = get_lead_scoring_service()
                             lead_data_obj = LeadData(
@@ -464,7 +441,6 @@ class MessageHandler:
                             if justificativa:
                                 notes = f"{notes}\n\n[Scoring negociação]: {justificativa}".strip()
 
-                            # Define temperatura baseada no score
                             if new_score >= 70:
                                 temperatura = LeadStatus.QUENTE
                             elif new_score >= 40:
@@ -485,7 +461,6 @@ class MessageHandler:
                             lead_dao.update_lead(db, lead.id, step_negociacao=True)
                             logger.info(f"Lead {lead.id} step_negociacao=True (sem scoring)")
                     elif result.get("current_score", 50) < 30:
-                        # Lead frio — seta temperatura e adiciona tag
                         lead_dao.update_lead(
                             db, lead.id,
                             status=LeadStatus.FRIO,
@@ -554,7 +529,6 @@ class MessageHandler:
         self.whatsapp.send_text_message(wa_id, unsupported_message)
         logger.info(f"Mensagem tipo '{message_type}' nao suportada para {wa_id}")
 
-
 def extract_message_data(payload: WebhookPayload) -> tuple[str | None, str | None, str | None, str | None, str | None]:
     if not payload.entry:
         return None, None, None, None, None
@@ -573,6 +547,5 @@ def extract_message_data(payload: WebhookPayload) -> tuple[str | None, str | Non
             text_body = message.text.body if message.text else None
             return wa_id, display_name, text_body, message.id, message_type
     return None, None, None, None, None
-
 
 message_handler = MessageHandler()

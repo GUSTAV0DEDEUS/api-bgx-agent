@@ -6,21 +6,12 @@ import requests
 
 from app.utils.settings import settings
 
-
 logger = logging.getLogger(__name__)
-
 
 class WhatsAppServiceError(RuntimeError):
     pass
 
-
 class WhatsAppService:
-    """
-    Serviço para integração com a API do WhatsApp Business (Meta).
-    
-    Permite injeção de token e phone_number_id no construtor para flexibilidade.
-    O verify_token é usado apenas para verificação do webhook (não para envio).
-    """
 
     def __init__(
         self,
@@ -48,7 +39,6 @@ class WhatsAppService:
         return to_number.lstrip("+")
 
     def send_text_message(self, to_number: str, text: str) -> dict:
-        """Envia uma mensagem de texto para um número do WhatsApp."""
         self._validate_config()
 
         normalized_number = self._normalize_number(to_number)
@@ -70,7 +60,6 @@ class WhatsAppService:
         return response.json()
 
     def mark_as_read(self, message_id: str) -> dict:
-        """Marca uma mensagem como lida."""
         self._validate_config()
 
         url = f"{self.base_url}/messages"
@@ -91,7 +80,6 @@ class WhatsAppService:
         return response.json()
 
     def get_media_url(self, media_id: str) -> str:
-        """Obtém a URL de download de uma mídia."""
         self._validate_config()
 
         url = f"https://graph.facebook.com/v22.0/{media_id}"
@@ -102,6 +90,4 @@ class WhatsAppService:
 
         return response.json().get("url", "")
 
-
-# Instância padrão para uso direto
 whatsapp_service = WhatsAppService()

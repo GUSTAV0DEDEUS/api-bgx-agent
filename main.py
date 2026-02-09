@@ -12,8 +12,6 @@ from app.controllers.message_controller import router as message_router
 from app.controllers.agent_config_controller import router as agent_config_router
 from app.services.websocket_manager import ws_manager
 
-
-# Configura logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -25,7 +23,6 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# Configuração de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,21 +31,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rotas
 app.include_router(webhook_router)
 app.include_router(client_router)
 app.include_router(lead_router)
 app.include_router(message_router)
 app.include_router(agent_config_router)
 
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket para eventos em tempo real (leads, mensagens, conversas)."""
     await ws_manager.connect(websocket)
     try:
         while True:
-            # Mantém a conexão viva recebendo pings do client
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text('{"event":"pong"}')

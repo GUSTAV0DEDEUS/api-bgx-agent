@@ -7,28 +7,17 @@ from openai import OpenAI
 
 from app.utils.settings import settings, load_system_prompt
 
-
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class ChatMessage:
-    """Representa uma mensagem no formato OpenAI."""
-    role: str  # 'user', 'assistant' ou 'system'
+    role: str
     content: str
-
 
 class AIServiceError(RuntimeError):
     pass
 
-
 class AIService:
-    """
-    Serviço para integração com APIs compatíveis com OpenAI.
-    
-    Suporta OpenAI nativo.
-    Usa roles: 'user' para usuário, 'assistant' para respostas do modelo.
-    """
 
     def __init__(
         self,
@@ -53,16 +42,8 @@ class AIService:
         return self._client
 
     def _build_messages(self, messages: list[ChatMessage]) -> list[dict]:
-        """
-        Constrói lista de mensagens no formato OpenAI.
-        Inclui system prompt se disponível.
-        
-        Args:
-            messages: Lista de mensagens da conversa
-        """
         result = []
         
-        # Adiciona system prompt do arquivo
         system_prompt = load_system_prompt()
             
         if system_prompt:
@@ -71,7 +52,6 @@ class AIService:
                 "content": system_prompt,
             })
         
-        # Converte mensagens (agent -> assistant para API)
         for msg in messages:
             role = "assistant" if msg.role == "agent" else msg.role
             result.append({
@@ -82,15 +62,6 @@ class AIService:
         return result
 
     def chat(self, messages: list[ChatMessage]) -> str:
-        """
-        Envia histórico de mensagens e retorna a resposta.
-        
-        Args:
-            messages: Lista de mensagens da conversa (role: user/agent)
-            
-        Returns:
-            Texto da resposta do modelo
-        """
         if not messages:
             raise AIServiceError("Nenhuma mensagem fornecida")
 
@@ -114,31 +85,16 @@ class AIService:
             raise AIServiceError(f"Erro ao gerar resposta: {e}") from e
 
     def simple_chat(self, message: str) -> str:
-        """
-        Envia uma única mensagem sem histórico.
-        
-        Args:
-            message: Mensagem do usuário
-            
-        Returns:
-            Texto da resposta do modelo
-        """
         return self.chat([ChatMessage(role="user", content=message)])
 
-
-# Instância padrão para uso direto (lazy loading)
 _ai_service: AIService | None = None
 
-
 def get_ai_service() -> AIService:
-    """Retorna instância singleton do AIService."""
     global _ai_service
     if _ai_service is None:
         _ai_service = AIService()
     return _ai_service
 
-
-# Aliases para compatibilidade
 GeminiService = AIService
 GeminiServiceError = AIServiceError
 get_gemini_service = get_ai_service

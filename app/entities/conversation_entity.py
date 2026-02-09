@@ -11,13 +11,12 @@ from sqlalchemy.sql import func
 
 from app.utils.db import Base
 
-
 class ConversationStatus:
-    """Status possíveis para uma conversa."""
-    OPEN = "open"      # IA responde normalmente
+    OPEN = "open"
+    HUMAN = "human"
+    CLOSED = "closed"      # IA responde normalmente
     HUMAN = "human"    # Consultor assumiu, IA silenciada
     CLOSED = "closed"  # Conversa encerrada
-
 
 class Conversation(Base):
     __tablename__ = "conversations"

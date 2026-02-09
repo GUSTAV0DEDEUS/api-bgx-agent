@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 
 from app.entities.message_entity import Message
 
-
 def create_message(
     db: Session,
     conversation_id,
@@ -27,16 +26,11 @@ def create_message(
     db.refresh(message)
     return message
 
-
 def get_messages_by_conversation_id(
     db: Session,
     conversation_id,
     limit: int | None = None,
 ) -> list[Message]:
-    """
-    Busca mensagens de uma conversa ordenadas por created_at (mais antigas primeiro).
-    Se limit for especificado, retorna apenas as últimas N mensagens.
-    """
     query = (
         db.query(Message)
         .filter(Message.conversation_id == conversation_id)
@@ -44,7 +38,6 @@ def get_messages_by_conversation_id(
     )
 
     if limit:
-        # Subquery para pegar os IDs das últimas N mensagens
         subquery = (
             db.query(Message.id)
             .filter(Message.conversation_id == conversation_id)

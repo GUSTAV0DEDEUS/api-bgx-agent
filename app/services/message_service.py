@@ -9,9 +9,7 @@ from app.dao import conversation_dao, message_dao, profile_dao
 from app.entities.conversation_entity import ConversationStatus
 from app.services.whatsapp_service import whatsapp_service
 
-
 logger = logging.getLogger(__name__)
-
 
 def send_human_message(
     db: Session,
@@ -19,21 +17,10 @@ def send_human_message(
     conversation_id: uuid.UUID,
     text: str,
 ) -> dict:
-    """
-    Envia mensagem de um humano (admin/consultor) para o cliente via WhatsApp.
-
-    Regras:
-    - A conversa deve existir e pertencer ao profile
-    - A conversa deve estar em status 'human' (consultor assumiu)
-    - A mensagem é persistida como role='admin'
-    - A mensagem é enviada via WhatsApp
-    """
-    # Valida profile
     profile = profile_dao.get_by_id(db, profile_id)
     if not profile:
         raise ValueError("Cliente nao encontrado")
 
-    # Valida conversa
     conversation = conversation_dao.get_by_id(db, conversation_id)
     if not conversation:
         raise ValueError("Conversa nao encontrada")
@@ -47,7 +34,6 @@ def send_human_message(
             f"Status atual: {conversation.status}"
         )
 
-    # Persiste a mensagem como admin
     message = message_dao.create_message(
         db,
         conversation_id=conversation_id,
@@ -56,7 +42,6 @@ def send_human_message(
         content=text,
     )
 
-    # Envia via WhatsApp
     try:
         whatsapp_service.send_text_message(profile.whatsapp_number, text)
         logger.info(
@@ -65,7 +50,6 @@ def send_human_message(
         )
     except Exception as e:
         logger.error(f"Erro ao enviar mensagem WhatsApp: {e}")
-        # Mensagem ja esta persistida, nao falha
 
     return {
         "id": message.id,

@@ -11,19 +11,16 @@ from sqlalchemy.sql import func
 
 from app.utils.db import Base
 
-
 class ToneEnum(str, Enum):
     PROFISSIONAL = "profissional"
     DESCONTRAIDO = "descontraido"
     TECNICO = "tecnico"
     AMIGAVEL = "amigavel"
 
-
 class EmojiUsageEnum(str, Enum):
     SEMPRE = "sempre"
     MODERADO = "moderado"
     NUNCA = "nunca"
-
 
 class ResponseStyleEnum(str, Enum):
     FORMAL = "formal"
@@ -31,12 +28,10 @@ class ResponseStyleEnum(str, Enum):
     CONSULTIVO = "consultivo"
     DIRETO = "direto"
 
-
 class GreetingStyleEnum(str, Enum):
     CALOROSO = "caloroso"
     NEUTRO = "neutro"
     OBJETIVO = "objetivo"
-
 
 class AgentConfig(Base):
     __tablename__ = "agent_config"

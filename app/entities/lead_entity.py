@@ -10,16 +10,12 @@ from sqlalchemy.sql import func
 
 from app.utils.db import Base
 
-
 class LeadStatus:
-    """Temperatura do lead (definida pela IA na fase de negociação)."""
     QUENTE = "quente"    # Score >= 70 — alta probabilidade de conversão
     MORNO = "morno"      # Score 40-69 — interesse moderado (default)
     FRIO = "frio"        # Score < 40 — baixo interesse / sinais negativos
 
-
 class Lead(Base):
-    """Entity para leads qualificados gerados ao encerrar conversas."""
 
     __tablename__ = "leads"
 
@@ -31,21 +27,17 @@ class Lead(Base):
         UUID(as_uuid=True), ForeignKey("profiles.id"), index=True, nullable=False
     )
 
-    # Dados comerciais do lead
     nome_cliente: Mapped[str | None] = mapped_column(String(255), nullable=True)
     nome_empresa: Mapped[str | None] = mapped_column(String(255), nullable=True)
     cargo: Mapped[str | None] = mapped_column(String(128), nullable=True)
     telefone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
-    # Qualificação
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     score: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Temperatura do lead (quente/morno/frio) — definida pela IA na negociação
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=LeadStatus.MORNO)
 
-    # Pipeline de vendas (checklist de steps)
     step_novo_lead: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     step_primeiro_contato: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_negociacao: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -55,15 +47,12 @@ class Lead(Base):
     step_venda_convertida: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     step_venda_perdida: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # Soft delete
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relacionamentos
     conversation = relationship("Conversation", back_populates="lead")
     profile = relationship("Profile", back_populates="leads")

@@ -5,9 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 class LeadBase(BaseModel):
-    """Base para lead."""
     nome_cliente: str | None = None
     nome_empresa: str | None = None
     cargo: str | None = None
@@ -15,16 +13,12 @@ class LeadBase(BaseModel):
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
 
-
 class LeadCreate(LeadBase):
-    """Request para criar lead manualmente."""
     conversation_id: uuid.UUID
     profile_id: uuid.UUID
     score: int | None = Field(default=None, ge=0, le=100)
 
-
 class LeadUpdate(BaseModel):
-    """Request para atualizar lead (PATCH)."""
     nome_cliente: str | None = None
     nome_empresa: str | None = None
     cargo: str | None = None
@@ -34,7 +28,6 @@ class LeadUpdate(BaseModel):
     notes: str | None = None
     status: str | None = Field(default=None, pattern="^(quente|morno|frio)$")
     
-    # Steps do pipeline (checklist)
     step_novo_lead: bool | None = None
     step_primeiro_contato: bool | None = None
     step_negociacao: bool | None = None
@@ -44,9 +37,7 @@ class LeadUpdate(BaseModel):
     step_venda_convertida: bool | None = None
     step_venda_perdida: bool | None = None
 
-
 class LeadSteps(BaseModel):
-    """Steps do pipeline de vendas."""
     novo_lead: bool
     primeiro_contato: bool
     negociacao: bool
@@ -56,9 +47,7 @@ class LeadSteps(BaseModel):
     venda_convertida: bool
     venda_perdida: bool
 
-
 class LeadResponse(BaseModel):
-    """Response de lead."""
     id: uuid.UUID
     conversation_id: uuid.UUID
     profile_id: uuid.UUID
@@ -71,7 +60,6 @@ class LeadResponse(BaseModel):
     notes: str | None
     status: str
     
-    # Steps do pipeline
     step_novo_lead: bool
     step_primeiro_contato: bool
     step_negociacao: bool
@@ -87,18 +75,14 @@ class LeadResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class LeadsListResponse(BaseModel):
-    """Resposta de listagem de leads paginada."""
     items: list[LeadResponse]
     total: int
     page: int
     per_page: int
     pages: int
 
-
 class LeadMetricsResponse(BaseModel):
-    """Resposta de métricas de leads."""
     total: int
     by_step: dict[str, int]
     by_status: dict[str, int]

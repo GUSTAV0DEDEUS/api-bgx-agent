@@ -19,9 +19,7 @@ from app.schemas.client_schemas import (
 )
 from app.utils.db import get_db
 
-
 router = APIRouter(prefix="/clients", tags=["Clients"])
-
 
 @router.get("/", response_model=ClientsListResponse)
 def list_clients(
@@ -30,12 +28,6 @@ def list_clients(
     tag: str | None = Query(default=None, description="Filtrar por tag"),
     db: Session = Depends(get_db),
 ):
-    """
-    Lista todos os clientes (profiles) com paginação.
-    
-    Filtros opcionais:
-    - tag: Filtra clientes que possuem a tag especificada
-    """
     profiles, total = profile_dao.get_all_paginated(db, page, per_page, tag)
     
     items = [
@@ -60,15 +52,11 @@ def list_clients(
         pages=math.ceil(total / per_page) if total > 0 else 0,
     )
 
-
 @router.get("/{client_id}", response_model=ClientDetailResponse)
 def get_client_detail(
     client_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    """
-    Retorna detalhes de um cliente específico com suas conversas.
-    """
     profile = profile_dao.get_by_id(db, client_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
@@ -105,15 +93,11 @@ def get_client_detail(
         conversations=conversations_response,
     )
 
-
 @router.get("/{client_id}/conversations", response_model=list[ConversationSummary])
 def get_client_conversations(
     client_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    """
-    Lista todas as conversas de um cliente específico.
-    """
     profile = profile_dao.get_by_id(db, client_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
@@ -134,7 +118,6 @@ def get_client_conversations(
         for c in conversations
     ]
 
-
 @router.get(
     "/{client_id}/conversations/{conversation_id}/messages",
     response_model=list[MessageResponse],
@@ -145,24 +128,16 @@ def get_conversation_messages(
     limit: int = Query(default=50, ge=1, le=200, description="Número máximo de mensagens"),
     db: Session = Depends(get_db),
 ):
-    """
-    Lista o histórico de mensagens de uma conversa.
-    
-    Retorna as mensagens ordenadas da mais antiga para a mais recente.
-    """
-    # Verifica se o cliente existe
     profile = profile_dao.get_by_id(db, client_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     
-    # Verifica se a conversa existe e pertence ao cliente
     conversation = conversation_dao.get_by_id(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversa não encontrada")
     if conversation.profile_id != client_id:
         raise HTTPException(status_code=404, detail="Conversa não pertence a este cliente")
     
-    # Busca mensagens
     messages = message_dao.get_messages_by_conversation_id(db, conversation_id, limit=limit)
     
     return [
@@ -176,21 +151,12 @@ def get_conversation_messages(
         for m in messages
     ]
 
-
 @router.post("/{client_id}/tags", response_model=ProfileWithTags)
 def add_client_tag(
     client_id: uuid.UUID,
     request: AddTagRequest,
     db: Session = Depends(get_db),
 ):
-    """
-    Adiciona uma tag a um cliente.
-    
-    Regras:
-    - Tag é normalizada para lowercase com underscores
-    - Máximo de 3 tags por cliente
-    - Tags duplicadas são ignoradas
-    """
     profile = profile_dao.add_tag(db, client_id, request.tag)
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
@@ -206,16 +172,12 @@ def add_client_tag(
         updated_at=profile.updated_at, # type: ignore
     )
 
-
 @router.delete("/{client_id}/tags/{tag}", response_model=ProfileWithTags)
 def remove_client_tag(
     client_id: uuid.UUID,
     tag: str,
     db: Session = Depends(get_db),
 ):
-    """
-    Remove uma tag de um cliente.
-    """
     profile = profile_dao.remove_tag(db, client_id, tag)
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
@@ -231,7 +193,6 @@ def remove_client_tag(
         updated_at=profile.updated_at, # type: ignore
     )
 
-
 @router.post(
     "/{client_id}/conversations/{conversation_id}/close",
     response_model=ConversationSummary,
@@ -242,30 +203,19 @@ def close_conversation(
     request: CloseConversationRequest | None = None,
     db: Session = Depends(get_db),
 ):
-    """
-    Fecha uma conversa (consultor encerra atendimento).
-    
-    - Muda status de 'human' para 'closed'
-    - Permite que próxima mensagem do cliente crie nova conversa
-    - Apenas conversas em status 'open' ou 'human' podem ser fechadas
-    """
-    # Verifica se o cliente existe
     profile = profile_dao.get_by_id(db, client_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     
-    # Verifica se a conversa existe e pertence ao cliente
     conversation = conversation_dao.get_by_id(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversa não encontrada")
     if conversation.profile_id != client_id:
         raise HTTPException(status_code=404, detail="Conversa não pertence a este cliente")
     
-    # Verifica se já está fechada
     if conversation.status == ConversationStatus.CLOSED:
         raise HTTPException(status_code=400, detail="Conversa já está fechada")
     
-    # Fecha a conversa
     reason = request.reason if request else None
     closed_conversation = conversation_dao.close_conversation(
         db, conversation_id, closed_by="admin", closed_reason=reason
@@ -285,7 +235,6 @@ def close_conversation(
         updated_at=closed_conversation.updated_at,
     )
 
-
 @router.post(
     "/{client_id}/conversations/{conversation_id}/human",
     response_model=ConversationSummary,
@@ -295,33 +244,22 @@ def set_human_takeover(
     conversation_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    """
-    Ativa human takeover manualmente (consultor assume atendimento).
-    
-    - Muda status de 'open' para 'human'
-    - IA para de responder
-    - Mensagens do cliente continuam sendo persistidas
-    """
-    # Verifica se o cliente existe
     profile = profile_dao.get_by_id(db, client_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     
-    # Verifica se a conversa existe e pertence ao cliente
     conversation = conversation_dao.get_by_id(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversa não encontrada")
     if conversation.profile_id != client_id:
         raise HTTPException(status_code=404, detail="Conversa não pertence a este cliente")
     
-    # Verifica se está em status válido
     if conversation.status != ConversationStatus.OPEN:
         raise HTTPException(
             status_code=400, 
             detail=f"Conversa precisa estar aberta. Status atual: {conversation.status}"
         )
     
-    # Ativa human takeover
     updated_conversation = conversation_dao.set_human_takeover(db, conversation_id)
     
     if not updated_conversation:

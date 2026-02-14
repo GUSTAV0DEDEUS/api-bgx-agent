@@ -42,7 +42,7 @@ CREATE TRIGGER update_users_updated_at
 -- Senha padrão: admin123
 -- Hash gerado com bcrypt
 INSERT INTO users (username, email, hashed_password)
-SELECT 'admin', 'admin@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqRhGvvgIS'
+SELECT 'admin', 'admin@example.com', '$2b$12$W1SeAGq2.jrSK9g9Vcr9r.dzuyOI9UWGGWfIViYsJdnqi6otdTbC.'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
 
 COMMENT ON COLUMN users.hashed_password IS 'Senha hasheada com bcrypt. Senha padrão do admin: admin123';

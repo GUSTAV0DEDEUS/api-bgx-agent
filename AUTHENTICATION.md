@@ -99,7 +99,8 @@ As seguintes variáveis de ambiente podem ser configuradas:
 
 - `JWT_SECRET_KEY`: Chave secreta para assinar os tokens
   - **IMPORTANTE**: Altere esta chave em produção!
-  - Se não configurada, o sistema usará um valor padrão inseguro e exibirá um aviso no log
+  - Se não configurada, o sistema gerará uma chave aleatória a cada reinício (tokens serão invalidados)
+  - Este comportamento é intencional para desenvolvimento, forçando configuração adequada
   - Recomendação: Use uma string aleatória de 64+ caracteres
   - Exemplo: `openssl rand -hex 64`
 - `JWT_ALGORITHM`: Algoritmo de criptografia (padrão: "HS256")

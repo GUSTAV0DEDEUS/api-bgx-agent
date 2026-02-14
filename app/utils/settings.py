@@ -37,6 +37,8 @@ class Settings:
     # JWT Authentication
     # IMPORTANT: Set JWT_SECRET_KEY in production! Using a default is insecure.
     # Generate a secure key with: openssl rand -hex 64
+    # Note: The auto-generated secret changes on restart, invalidating all tokens.
+    # This is intentional for development to encourage proper configuration.
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", f"INSECURE-RANDOM-{secrets.token_hex(32)}")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     jwt_access_token_expire_minutes: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days default
@@ -53,6 +55,7 @@ if "JWT_SECRET_KEY" not in os.environ:
         "\n" + "=" * 80 + "\n"
         "⚠️  WARNING: Using auto-generated JWT secret key!\n"
         "⚠️  This is INSECURE for production use!\n"
+        "⚠️  The secret changes on each restart, invalidating all existing tokens.\n"
         "⚠️  Set JWT_SECRET_KEY environment variable to a secure random string.\n"
         "⚠️  Generate one with: openssl rand -hex 64\n"
         + "=" * 80

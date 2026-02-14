@@ -20,7 +20,21 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
-    """Create a JWT access token."""
+    """
+    Create a JWT access token.
+    
+    Args:
+        data: Dictionary containing the token payload. Should include:
+            - 'sub' (str): Subject identifier, typically the user ID as string
+            - Additional custom claims can be included
+        expires_delta: Optional custom expiration time. If None, uses default from settings.
+    
+    Returns:
+        str: Encoded JWT token
+        
+    Example:
+        token = create_access_token(data={"sub": str(user.id)})
+    """
     to_encode = data.copy()
     
     if expires_delta:

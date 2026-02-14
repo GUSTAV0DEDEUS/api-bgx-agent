@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 from pathlib import Path
 from functools import lru_cache
 
@@ -35,7 +36,8 @@ class Settings:
 
     # JWT Authentication
     # IMPORTANT: Set JWT_SECRET_KEY in production! Using a default is insecure.
-    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "INSECURE-DEFAULT-CHANGE-ME-IN-PRODUCTION-" + "a" * 32)
+    # Generate a secure key with: openssl rand -hex 64
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", f"INSECURE-RANDOM-{secrets.token_hex(32)}")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     jwt_access_token_expire_minutes: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days default
 
@@ -46,10 +48,14 @@ class Settings:
 settings = Settings()
 
 # Warn if using default JWT secret key
-if settings.jwt_secret_key.startswith("INSECURE-DEFAULT"):
+if "JWT_SECRET_KEY" not in os.environ:
     logger.warning(
-        "⚠️  Using default JWT secret key! This is INSECURE for production. "
-        "Please set JWT_SECRET_KEY environment variable to a secure random string."
+        "\n" + "=" * 80 + "\n"
+        "⚠️  WARNING: Using auto-generated JWT secret key!\n"
+        "⚠️  This is INSECURE for production use!\n"
+        "⚠️  Set JWT_SECRET_KEY environment variable to a secure random string.\n"
+        "⚠️  Generate one with: openssl rand -hex 64\n"
+        + "=" * 80
     )
 
 def _load_prompt_file(filename: str) -> str:

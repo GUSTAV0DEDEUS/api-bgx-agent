@@ -10,6 +10,7 @@ from app.controllers.client_controller import router as client_router
 from app.controllers.lead_controller import router as lead_router
 from app.controllers.message_controller import router as message_router
 from app.controllers.agent_config_controller import router as agent_config_router
+from app.controllers.auth_controller import router as auth_router
 from app.services.websocket_manager import ws_manager
 
 logging.basicConfig(
@@ -31,6 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(webhook_router)
 app.include_router(client_router)
 app.include_router(lead_router)

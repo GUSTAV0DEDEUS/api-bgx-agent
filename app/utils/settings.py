@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from pathlib import Path
 from functools import lru_cache
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class Settings:
 
@@ -30,11 +34,32 @@ class Settings:
     min_response_delay: int = int(os.getenv("MIN_RESPONSE_DELAY", "10"))
     max_response_delay: int = int(os.getenv("MAX_RESPONSE_DELAY", "45"))
 
+    # JWT Authentication
+    # IMPORTANT: Set JWT_SECRET_KEY in production! Using a default is insecure.
+    # Generate a secure key with: openssl rand -hex 64
+    # Note: The auto-generated secret changes on restart, invalidating all tokens.
+    # This is intentional for development to encourage proper configuration.
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", f"INSECURE-RANDOM-{secrets.token_hex(32)}")
+    jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
+    jwt_access_token_expire_minutes: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days default
+
     @property
     def database_url(self) -> str:
         return f"postgresql+psycopg2://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 settings = Settings()
+
+# Warn if using default JWT secret key
+if "JWT_SECRET_KEY" not in os.environ:
+    logger.warning(
+        "\n" + "=" * 80 + "\n"
+        "⚠️  WARNING: Using auto-generated JWT secret key!\n"
+        "⚠️  This is INSECURE for production use!\n"
+        "⚠️  The secret changes on each restart, invalidating all existing tokens.\n"
+        "⚠️  Set JWT_SECRET_KEY environment variable to a secure random string.\n"
+        "⚠️  Generate one with: openssl rand -hex 64\n"
+        + "=" * 80
+    )
 
 def _load_prompt_file(filename: str) -> str:
     instructions_path = Path(__file__).parent.parent / "instructions" / filename

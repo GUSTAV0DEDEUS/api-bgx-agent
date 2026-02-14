@@ -25,3 +25,8 @@ uvicorn==0.40.0
 langgraph>=0.2.0
 langchain-openai>=0.2.0
 langchain-core>=0.3.0
+
+# JWT e Autenticação
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.22

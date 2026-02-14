@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from functools import lru_cache
@@ -7,6 +8,8 @@ from functools import lru_cache
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class Settings:
 
@@ -31,7 +34,8 @@ class Settings:
     max_response_delay: int = int(os.getenv("MAX_RESPONSE_DELAY", "45"))
 
     # JWT Authentication
-    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+    # IMPORTANT: Set JWT_SECRET_KEY in production! Using a default is insecure.
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "INSECURE-DEFAULT-CHANGE-ME-IN-PRODUCTION-" + "a" * 32)
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     jwt_access_token_expire_minutes: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days default
 
@@ -40,6 +44,13 @@ class Settings:
         return f"postgresql+psycopg2://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 settings = Settings()
+
+# Warn if using default JWT secret key
+if settings.jwt_secret_key.startswith("INSECURE-DEFAULT"):
+    logger.warning(
+        "⚠️  Using default JWT secret key! This is INSECURE for production. "
+        "Please set JWT_SECRET_KEY environment variable to a secure random string."
+    )
 
 def _load_prompt_file(filename: str) -> str:
     instructions_path = Path(__file__).parent.parent / "instructions" / filename

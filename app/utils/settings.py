@@ -30,6 +30,11 @@ class Settings:
     min_response_delay: int = int(os.getenv("MIN_RESPONSE_DELAY", "10"))
     max_response_delay: int = int(os.getenv("MAX_RESPONSE_DELAY", "45"))
 
+    # JWT Authentication
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+    jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
+    jwt_access_token_expire_minutes: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days default
+
     @property
     def database_url(self) -> str:
         return f"postgresql+psycopg2://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"

@@ -97,8 +97,11 @@ def list_leads(
 
 As seguintes variáveis de ambiente podem ser configuradas:
 
-- `JWT_SECRET_KEY`: Chave secreta para assinar os tokens (padrão: "your-secret-key-change-in-production")
+- `JWT_SECRET_KEY`: Chave secreta para assinar os tokens
   - **IMPORTANTE**: Altere esta chave em produção!
+  - Se não configurada, o sistema usará um valor padrão inseguro e exibirá um aviso no log
+  - Recomendação: Use uma string aleatória de 64+ caracteres
+  - Exemplo: `openssl rand -hex 64`
 - `JWT_ALGORITHM`: Algoritmo de criptografia (padrão: "HS256")
 - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`: Tempo de expiração do token em minutos (padrão: 43200 = 30 dias)
 
